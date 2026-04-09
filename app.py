@@ -1,93 +1,151 @@
 import streamlit as st
+import json
+import os
+import plotly.express as px
 import pandas as pd
 
-# --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="MetaFluxo - Controle Financeiro", page_icon="📈")
+# --- CONFIGURAÇÃO VISUAL ---
+st.set_page_config(page_title="MetaFluxo 📈", layout="wide", page_icon="📈")
 
-# --- BANCO DE DADOS EM MEMÓRIA ---
-if 'user_db' not in st.session_state:
-    st.session_state['user_db'] = {"admin": {"password": "123", "security_answer": "Murillo"}}
+# --- BANCO DE DADOS ---
+DB_FILE = "metafluxo_db.json"
+
+def carregar_banco():
+    if os.path.exists(DB_FILE):
+        with open(DB_FILE, "r") as f:
+            return json.load(f)
+    return {"users": {"admin": {"password": "123", "security_answer": "Murillo"}}}
+
+def salvar_banco(dados):
+    with open(DB_FILE, "w") as f:
+        json.dump(dados, f, indent=4)
+
+if 'db' not in st.session_state:
+    st.session_state.db = carregar_banco()
+
+# --- LÓGICA DE LOGIN ---
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 if 'login_error' not in st.session_state:
     st.session_state['login_error'] = False
 
-# --- INTERFACE DE ACESSO (LOGIN / CRIAR CONTA) ---
 if not st.session_state['logged_in']:
     st.title("📈 MetaFluxo")
-    
     aba_login, aba_criar = st.tabs(["Acessar Login", "Criar Nova Conta"])
     
     with aba_login:
-        user = st.text_input("Usuário", key="user_login")
-        passw = st.text_input("Senha", type="password", key="pass_login")
-        
+        user = st.text_input("Usuário", key="u_log")
+        passw = st.text_input("Senha", type="password", key="p_log")
         if st.button("Entrar"):
-            if user in st.session_state['user_db'] and st.session_state['user_db'][user]['password'] == passw:
+            if user in st.session_state.db["users"] and st.session_state.db["users"][user]["password"] == passw:
                 st.session_state['logged_in'] = True
-                st.session_state['login_error'] = False
+                st.session_state['current_user'] = user
                 st.rerun()
             else:
                 st.session_state['login_error'] = True
                 st.error("Usuário ou senha incorretos.")
 
-        # SÓ APARECE SE ERRAR O LOGIN
         if st.session_state['login_error']:
-            st.warning("Esqueceu seus dados?")
             if st.button("Redefinir a senha"):
                 st.session_state['show_reset'] = True
-
-        # ÁREA DE REDEFINIÇÃO (ABRE EMBAIXO SE CLICAR)
+        
         if st.session_state.get('show_reset'):
             st.divider()
-            st.subheader("Recuperação de Acesso")
-            user_res = st.text_input("Usuário para recuperar")
+            u_res = st.text_input("Usuário para recuperar")
             resp = st.text_input("Pergunta: Qual o nome do seu filho?")
-            nova_s = st.text_input("Nova Senha desejada", type="password")
+            nova_s = st.text_input("Nova Senha", type="password")
             if st.button("Salvar Nova Senha"):
-                if user_res in st.session_state['user_db'] and resp.lower() == st.session_state['user_db'][user_res]['security_answer'].lower():
-                    st.session_state['user_db'][user_res]['password'] = nova_s
-                    st.success("Senha alterada! Tente logar novamente.")
+                if u_res in st.session_state.db["users"] and resp.lower() == st.session_state.db["users"][u_res]["security_answer"].lower():
+                    st.session_state.db["users"][u_res]["password"] = nova_s
+                    salvar_banco(st.session_state.db)
+                    st.success("Senha alterada! Tente logar.")
                     st.session_state['show_reset'] = False
                 else:
-                    st.error("Resposta ou usuário incorretos.")
+                    st.error("Resposta incorreta.")
 
     with aba_criar:
-        novo_user = st.text_input("Escolha um Usuário")
-        nova_senha = st.text_input("Escolha uma Senha", type="password")
-        pergunta = st.text_input("Pergunta de Segurança: Nome do seu filho?")
-        if st.button("Cadastrar Conta"):
-            if novo_user and nova_senha:
-                st.session_state['user_db'][novo_user] = {"password": nova_senha, "security_answer": pergunta}
-                st.success("Conta criada com sucesso! Vá para a aba Login.")
-            else:
-                st.error("Preencha todos os campos.")
-
-# --- PAINEL DO APLICATIVO (APÓS LOGIN) ---
+        n_user = st.text_input("Novo Usuário")
+        n_pass = st.text_input("Nova Senha", type="password")
+        n_resp = st.text_input("Pergunta de Segurança: Nome do seu filho?")
+        if st.button("Cadastrar"):
+            if n_user and n_pass:
+                st.session_state.db["users"][n_user] = {"password": n_pass, "security_answer": n_resp}
+                salvar_banco(st.session_state.db)
+                st.success("Conta criada!")
 else:
-    st.title("📈 MetaFluxo - Dashboard")
-    st.sidebar.header(f"Bem-vindo!")
+    # --- O SEU CÓDIGO VISUAL ORIGINAL COMEÇA AQUI ---
+    user_atual = st.session_state['current_user']
     
-    # Menu lateral para navegação
-    menu = st.sidebar.selectbox("Menu", ["Resumo Geral", "Lançar Gastos/Ganhos", "Configurações"])
+    with st.sidebar:
+        st.title("📈 MetaFluxo")
+        st.write(f"Usuário: **{user_atual}**")
+        mes = st.selectbox("Escolha o Mês", ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"], index=3)
+        renda = st.number_input("Sua Renda (R$)", value=3000.0)
+        meta_inv = st.number_input("Meta de Investimento (R$)", value=1000.0)
+        st.divider()
+        if st.button("🚪 Sair"):
+            st.session_state['logged_in'] = False
+            st.rerun()
+
+    if mes not in st.session_state.db:
+        st.session_state.db[mes] = {"gastos": [], "investido": 0.0}
+    dados_mes = st.session_state.db[mes]
+
+    st.title(f"📈 Painel de {mes}")
+
+    investido = st.number_input("Quanto guardou este mês?", min_value=0.0, value=float(dados_mes["investido"]), key=f"inv_{mes}")
+    dados_mes["investido"] = investido
+
+    st.subheader("🎯 Progresso da Meta")
+    falta = max(0.0, meta_inv - investido)
+    progresso = min(investido / meta_inv, 1.0) if meta_inv > 0 else 0.0
+    st.progress(progresso)
     
-    if menu == "Resumo Geral":
-        st.subheader("Seu Saldo Atual")
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Entradas", "R$ 0,00")
-        col2.metric("Saídas", "R$ 0,00", delta_color="inverse")
-        col3.metric("Saldo", "R$ 0,00")
-        st.info("Aqui aparecerão seus gráficos em breve!")
+    if falta > 0:
+        st.markdown(f"<p style='color: #FFD700; font-size: 20px; font-weight: bold;'>⚡ {progresso*100:.1f}% atingido! (Faltam R$ {falta:,.2f})</p>", unsafe_allow_html=True)
+    else:
+        st.markdown(f"<p style='color: #2ecc71; font-size: 20px; font-weight: bold;'>🏆 META ATINGIDA!</p>", unsafe_allow_html=True)
 
-    elif menu == "Lançar Gastos/Ganhos":
-        st.subheader("Novo Lançamento")
-        tipo = st.radio("Tipo", ["Entrada", "Saída"])
-        valor = st.number_input("Valor (R$)", min_value=0.0, step=0.01)
-        desc = st.text_input("Descrição (Ex: Aluguel, Salário)")
-        if st.button("Salvar Lançamento"):
-            st.success(f"{tipo} de R$ {valor} salva com sucesso!")
+    st.divider()
+    st.subheader("📝 Seus Blocos de Gastos")
 
-    st.sidebar.divider()
-    if st.sidebar.button("Sair do App"):
-        st.session_state['logged_in'] = False
-        st.rerun()
+    if st.button("➕ Adicionar Bloco"):
+        st.session_state.db[mes]["gastos"].append({"item": "Novo Gasto", "valor": 0.0, "pago": False})
+
+    total_pago = 0.0
+    total_a_pagar = 0.0
+
+    for i, gasto in enumerate(dados_mes["gastos"]):
+        c1, c2, c3, c4 = st.columns([3, 2, 1, 2])
+        with c1:
+            gasto["item"] = st.text_input(f"O que é?", gasto["item"], key=f"it_{mes}_{i}")
+        with c2:
+            gasto["valor"] = st.number_input(f"Valor (R$)", value=float(gasto["valor"]), key=f"vl_{mes}_{i}")
+        with c3:
+            gasto["pago"] = st.checkbox("✅", value=gasto["pago"], key=f"ck_{mes}_{i}")
+        with c4:
+            restante = 0.0 if gasto["pago"] else gasto["valor"]
+            st.metric("A Pagar", f"R$ {restante:,.2f}")
+            if gasto["pago"]: total_pago += gasto["valor"]
+            else: total_a_pagar += gasto["valor"]
+
+    st.divider()
+    col_res, col_graf = st.columns([1, 1])
+    saldo_livre = renda - total_pago - investido
+
+    with col_res:
+        st.subheader("📊 Resumo")
+        st.metric("✅ Total Pago", f"R$ {total_pago:,.2f}")
+        st.metric("💰 Saldo Livre", f"R$ {saldo_livre:,.2f}")
+        st.metric("⏳ Pendente", f"R$ {total_a_pagar:,.2f}")
+
+    with col_graf:
+        df_graf = pd.DataFrame({
+            "Categoria": ["Pago", "Pendente", "Investido", "Livre"],
+            "Valores": [total_pago, total_a_pagar, investido, max(0, saldo_livre)]
+        })
+        fig = px.pie(df_graf, values='Valores', names='Categoria', hole=0.5,
+                     color_discrete_sequence=["#2ecc71", "#e74c3c", "#f1c40f", "#3498db"])
+        st.plotly_chart(fig, use_container_width=True)
+
+    salvar_banco(st.session_state.db)
