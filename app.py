@@ -14,7 +14,7 @@ def carregar_banco():
     if os.path.exists(DB_FILE):
         with open(DB_FILE, "r") as f:
             return json.load(f)
-    return {"users": {"admin": {"password": "123", "security_answer": "Murillo"}}}
+    return {"users": {"admin": {"password": "123", "security_answer": "Murillo"}}, "config": {"categorias": {"🏠 Moradia": "#3498db", "🍎 Alimentação": "#e67e22", "🚗 Transporte": "#9b59b6", "🎡 Lazer": "#f1c40f", "💊 Saúde": "#e74c3c", "🛠️ Outros": "#95a5a6"}}}
 
 def salvar_banco(dados):
     with open(DB_FILE, "w") as f:
@@ -69,7 +69,6 @@ if not st.session_state['logged_in']:
         n_resp = st.text_input("Pergunta de Segurança: Nome do seu filho?")
         if st.button("Cadastrar"):
             if n_user and n_pass:
-                if "users" not in st.session_state.db: st.session_state.db["users"] = {}
                 st.session_state.db["users"][n_user] = {"password": n_pass, "security_answer": n_resp}
                 salvar_banco(st.session_state.db)
                 st.success("Conta criada!")
@@ -109,51 +108,62 @@ else:
 
     st.divider()
 
-    # --- NOVA ESTRUTURA PARA EVITAR ROLAGEM INFINITA ---
-    col_gastos, col_graficos = st.columns([1.5, 1])
+    # --- NOVA ESTRUTURA COM CATEGORIAS E FILTROS ---
+    col_gastos, col_graficos = st.columns([1.6, 1])
 
     with col_gastos:
-        st.subheader("📝 Seus Blocos de Gastos")
-        if st.button("➕ Adicionar Bloco"):
-            st.session_state.db[mes]["gastos"].append({"item": "Novo Gasto", "valor": 0.0, "pago": False})
+        c1, c2 = st.columns([1, 1])
+        with c1:
+            st.subheader("📝 Gastos")
+        with c2:
+            filtro = st.radio("Mostrar:", ["Todos", "Pendentes", "Pagos"], horizontal=True)
+
+        if st.button("➕ Adicionar Novo Gasto"):
+            st.session_state.db[mes]["gastos"].append({"item": "Novo", "valor": 0.0, "pago": False, "cat": "🛠️ Outros"})
 
         total_pago = 0.0
         total_a_pagar = 0.0
+        categorias_lista = list(st.session_state.db.get("config", {}).get("categorias", {}).keys())
 
-        # CRIANDO A JANELA DE ROLAGEM (Scroll)
-        # O height=450 define a altura da caixa. Se passar disso, surge a barra de rolagem.
-        scroll_container = st.container(height=450)
-        
+        scroll_container = st.container(height=500)
         with scroll_container:
             for i, gasto in enumerate(dados_mes["gastos"]):
-                c1, c2, c3, c4 = st.columns([3, 2, 1, 2])
-                with c1:
-                    gasto["item"] = st.text_input(f"O que é?", gasto["item"], key=f"it_{mes}_{i}")
-                with c2:
-                    gasto["valor"] = st.number_input(f"Valor (R$)", value=float(gasto["valor"]), key=f"vl_{mes}_{i}")
-                with c3:
-                    gasto["pago"] = st.checkbox("✅", value=gasto["pago"], key=f"ck_{mes}_{i}")
-                with c4:
-                    restante = 0.0 if gasto["pago"] else gasto["valor"]
-                    st.metric("A Pagar", f"R$ {restante:,.2f}")
-                    if gasto["pago"]: total_pago += gasto["valor"]
-                    else: total_a_pagar += gasto["valor"]
+                # Lógica de Filtro
+                if filtro == "Pendentes" and gasto["pago"]: continue
+                if filtro == "Pagos" and not gasto["pago"]: continue
+
+                with st.expander(f"{gasto.get('cat', '🛠️')} {gasto['item']} - R$ {gasto['valor']:,.2f}"):
+                    ca1, ca2, ca3, ca4 = st.columns([2, 2, 1, 1])
+                    gasto["item"] = ca1.text_input("O que é?", gasto["item"], key=f"it_{mes}_{i}")
+                    gasto["cat"] = ca2.selectbox("Categoria", categorias_lista, index=categorias_lista.index(gasto.get("cat", "🛠️ Outros")), key=f"ct_{mes}_{i}")
+                    gasto["valor"] = ca3.number_input("Valor", value=float(gasto["valor"]), key=f"vl_{mes}_{i}")
+                    gasto["pago"] = ca4.checkbox("Pago?", value=gasto["pago"], key=f"ck_{mes}_{i}")
+                    
+                    if st.button("🗑️", key=f"del_{mes}_{i}"):
+                        st.session_state.db[mes]["gastos"].pop(i)
+                        salvar_banco(st.session_state.db)
+                        st.rerun()
+
+                if gasto["pago"]: total_pago += gasto["valor"]
+                else: total_a_pagar += gasto["valor"]
 
     with col_graficos:
-        st.subheader("📊 Resumo e Gráfico")
+        st.subheader("📊 Resumo Financeiro")
         saldo_livre = renda - total_pago - investido
 
-        st.metric("✅ Total Pago", f"R$ {total_pago:,.2f}")
+        st.metric("✅ Pago", f"R$ {total_pago:,.2f}")
+        st.metric("⏳ Pendente", f"R$ {total_a_pagar:,.2f}", delta=f"R$ {total_a_pagar}", delta_color="inverse")
         st.metric("💰 Saldo Livre", f"R$ {saldo_livre:,.2f}")
-        st.metric("⏳ Pendente", f"R$ {total_a_pagar:,.2f}")
 
-        df_graf = pd.DataFrame({
-            "Categoria": ["Pago", "Pendente", "Investido", "Livre"],
-            "Valores": [total_pago, total_a_pagar, investido, max(0, saldo_livre)]
-        })
-        fig = px.pie(df_graf, values='Valores', names='Categoria', hole=0.5,
-                     color_discrete_sequence=["#2ecc71", "#e74c3c", "#f1c40f", "#3498db"])
-        fig.update_layout(margin=dict(t=0, b=0, l=0, r=0))
-        st.plotly_chart(fig, use_container_width=True)
+        # Gráfico por Categoria
+        df_cat = pd.DataFrame(dados_mes["gastos"])
+        if not df_cat.empty:
+            df_resumo_cat = df_cat.groupby("cat")["valor"].sum().reset_index()
+            fig = px.pie(df_resumo_cat, values='valor', names='cat', hole=0.5, title="Gastos por Categoria",
+                         color_discrete_sequence=px.colors.qualitative.Pastel)
+            fig.update_layout(margin=dict(t=30, b=0, l=0, r=0))
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Adicione gastos para ver o gráfico.")
 
     salvar_banco(st.session_state.db)
