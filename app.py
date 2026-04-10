@@ -69,11 +69,12 @@ if not st.session_state['logged_in']:
         n_resp = st.text_input("Pergunta de Segurança: Nome do seu filho?")
         if st.button("Cadastrar"):
             if n_user and n_pass:
+                if "users" not in st.session_state.db: st.session_state.db["users"] = {}
                 st.session_state.db["users"][n_user] = {"password": n_pass, "security_answer": n_resp}
                 salvar_banco(st.session_state.db)
                 st.success("Conta criada!")
 else:
-    # --- O SEU CÓDIGO VISUAL ORIGINAL COMEÇA AQUI ---
+    # --- PAINEL PRINCIPAL ---
     user_atual = st.session_state['current_user']
     
     with st.sidebar:
@@ -107,45 +108,52 @@ else:
         st.markdown(f"<p style='color: #2ecc71; font-size: 20px; font-weight: bold;'>🏆 META ATINGIDA!</p>", unsafe_allow_html=True)
 
     st.divider()
-    st.subheader("📝 Seus Blocos de Gastos")
 
-    if st.button("➕ Adicionar Bloco"):
-        st.session_state.db[mes]["gastos"].append({"item": "Novo Gasto", "valor": 0.0, "pago": False})
+    # --- NOVA ESTRUTURA PARA EVITAR ROLAGEM INFINITA ---
+    col_gastos, col_graficos = st.columns([1.5, 1])
 
-    total_pago = 0.0
-    total_a_pagar = 0.0
+    with col_gastos:
+        st.subheader("📝 Seus Blocos de Gastos")
+        if st.button("➕ Adicionar Bloco"):
+            st.session_state.db[mes]["gastos"].append({"item": "Novo Gasto", "valor": 0.0, "pago": False})
 
-    for i, gasto in enumerate(dados_mes["gastos"]):
-        c1, c2, c3, c4 = st.columns([3, 2, 1, 2])
-        with c1:
-            gasto["item"] = st.text_input(f"O que é?", gasto["item"], key=f"it_{mes}_{i}")
-        with c2:
-            gasto["valor"] = st.number_input(f"Valor (R$)", value=float(gasto["valor"]), key=f"vl_{mes}_{i}")
-        with c3:
-            gasto["pago"] = st.checkbox("✅", value=gasto["pago"], key=f"ck_{mes}_{i}")
-        with c4:
-            restante = 0.0 if gasto["pago"] else gasto["valor"]
-            st.metric("A Pagar", f"R$ {restante:,.2f}")
-            if gasto["pago"]: total_pago += gasto["valor"]
-            else: total_a_pagar += gasto["valor"]
+        total_pago = 0.0
+        total_a_pagar = 0.0
 
-    st.divider()
-    col_res, col_graf = st.columns([1, 1])
-    saldo_livre = renda - total_pago - investido
+        # CRIANDO A JANELA DE ROLAGEM (Scroll)
+        # O height=450 define a altura da caixa. Se passar disso, surge a barra de rolagem.
+        scroll_container = st.container(height=450)
+        
+        with scroll_container:
+            for i, gasto in enumerate(dados_mes["gastos"]):
+                c1, c2, c3, c4 = st.columns([3, 2, 1, 2])
+                with c1:
+                    gasto["item"] = st.text_input(f"O que é?", gasto["item"], key=f"it_{mes}_{i}")
+                with c2:
+                    gasto["valor"] = st.number_input(f"Valor (R$)", value=float(gasto["valor"]), key=f"vl_{mes}_{i}")
+                with c3:
+                    gasto["pago"] = st.checkbox("✅", value=gasto["pago"], key=f"ck_{mes}_{i}")
+                with c4:
+                    restante = 0.0 if gasto["pago"] else gasto["valor"]
+                    st.metric("A Pagar", f"R$ {restante:,.2f}")
+                    if gasto["pago"]: total_pago += gasto["valor"]
+                    else: total_a_pagar += gasto["valor"]
 
-    with col_res:
-        st.subheader("📊 Resumo")
+    with col_graficos:
+        st.subheader("📊 Resumo e Gráfico")
+        saldo_livre = renda - total_pago - investido
+
         st.metric("✅ Total Pago", f"R$ {total_pago:,.2f}")
         st.metric("💰 Saldo Livre", f"R$ {saldo_livre:,.2f}")
         st.metric("⏳ Pendente", f"R$ {total_a_pagar:,.2f}")
 
-    with col_graf:
         df_graf = pd.DataFrame({
             "Categoria": ["Pago", "Pendente", "Investido", "Livre"],
             "Valores": [total_pago, total_a_pagar, investido, max(0, saldo_livre)]
         })
         fig = px.pie(df_graf, values='Valores', names='Categoria', hole=0.5,
                      color_discrete_sequence=["#2ecc71", "#e74c3c", "#f1c40f", "#3498db"])
+        fig.update_layout(margin=dict(t=0, b=0, l=0, r=0))
         st.plotly_chart(fig, use_container_width=True)
 
     salvar_banco(st.session_state.db)
