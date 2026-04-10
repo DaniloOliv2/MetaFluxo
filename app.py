@@ -108,7 +108,6 @@ else:
 
     st.divider()
 
-    # --- NOVA ESTRUTURA COM CATEGORIAS E FILTROS ---
     col_gastos, col_graficos = st.columns([1.6, 1])
 
     with col_gastos:
@@ -127,8 +126,10 @@ else:
 
         scroll_container = st.container(height=500)
         with scroll_container:
+            # Lista de índices para deletar depois do loop para não quebrar a lógica
+            idx_para_deletar = None
+            
             for i, gasto in enumerate(dados_mes["gastos"]):
-                # Lógica de Filtro
                 if filtro == "Pendentes" and gasto["pago"]: continue
                 if filtro == "Pagos" and not gasto["pago"]: continue
 
@@ -139,31 +140,50 @@ else:
                     gasto["valor"] = ca3.number_input("Valor", value=float(gasto["valor"]), key=f"vl_{mes}_{i}")
                     gasto["pago"] = ca4.checkbox("Pago?", value=gasto["pago"], key=f"ck_{mes}_{i}")
                     
-                    if st.button("🗑️", key=f"del_{mes}_{i}"):
-                        st.session_state.db[mes]["gastos"].pop(i)
-                        salvar_banco(st.session_state.db)
-                        st.rerun()
+                    if st.button("🗑️ Apagar", key=f"del_{mes}_{i}"):
+                        idx_para_deletar = i
 
                 if gasto["pago"]: total_pago += gasto["valor"]
                 else: total_a_pagar += gasto["valor"]
+            
+            if idx_para_deletar is not None:
+                dados_mes["gastos"].pop(idx_para_deletar)
+                salvar_banco(st.session_state.db)
+                st.rerun()
 
     with col_graficos:
         st.subheader("📊 Resumo Financeiro")
-        saldo_livre = renda - total_pago - investido
+        saldo_livre = max(0, renda - total_pago - total_a_pagar - investido)
 
-        st.metric("✅ Pago", f"R$ {total_pago:,.2f}")
-        st.metric("⏳ Pendente", f"R$ {total_a_pagar:,.2f}", delta=f"R$ {total_a_pagar}", delta_color="inverse")
+        st.metric("✅ Total Pago", f"R$ {total_pago:,.2f}")
+        st.metric("⏳ Pendente", f"R$ {total_a_pagar:,.2f}")
         st.metric("💰 Saldo Livre", f"R$ {saldo_livre:,.2f}")
 
-        # Gráfico por Categoria
-        df_cat = pd.DataFrame(dados_mes["gastos"])
-        if not df_cat.empty:
-            df_resumo_cat = df_cat.groupby("cat")["valor"].sum().reset_index()
-            fig = px.pie(df_resumo_cat, values='valor', names='cat', hole=0.5, title="Gastos por Categoria",
-                         color_discrete_sequence=px.colors.qualitative.Pastel)
-            fig.update_layout(margin=dict(t=30, b=0, l=0, r=0))
+        # --- LÓGICA DO GRÁFICO CORRIGIDA ---
+        st.write("---")
+        st.write("**Distribuição da Renda:**")
+        
+        # Criando dados para o gráfico de pizza (Tudo o que compõe a renda)
+        labels = ["Pago", "Pendente", "Investido", "Saldo Livre"]
+        valores = [total_pago, total_a_pagar, investido, saldo_livre]
+        cores = ["#2ecc71", "#e74c3c", "#f1c40f", "#3498db"]
+
+        df_pizza = pd.DataFrame({"Destino": labels, "Valor": valores})
+        # Remove valores zero para o gráfico não ficar poluído
+        df_pizza = df_pizza[df_pizza["Valor"] > 0]
+
+        if not df_pizza.empty:
+            fig = px.pie(df_pizza, values='Valor', names='Destino', hole=0.5,
+                         color='Destino',
+                         color_discrete_map={
+                             "Pago": "#2ecc71", 
+                             "Pendente": "#e74c3c", 
+                             "Investido": "#f1c40f", 
+                             "Saldo Livre": "#3498db"
+                         })
+            fig.update_layout(margin=dict(t=0, b=0, l=0, r=0), showlegend=True)
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("Adicione gastos para ver o gráfico.")
+            st.info("Lance valores para gerar o gráfico.")
 
     salvar_banco(st.session_state.db)
