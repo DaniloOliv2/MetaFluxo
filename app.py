@@ -3,11 +3,17 @@ import json
 import os
 import plotly.express as px
 import pandas as pd
+from PIL import Image
 
 # --- CONFIGURAÇÃO VISUAL ---
-st.set_page_config(page_title="MetaFluxo Dark Pro 📈", layout="wide", page_icon="📈")
+# O ícone da aba do navegador (favicon) também usará o seu logo
+try:
+    img_logo = Image.open("logo.png")
+    st.set_page_config(page_title="MetaFlux Pro 📈", layout="wide", page_icon=img_logo)
+except:
+    st.set_page_config(page_title="MetaFlux Pro 📈", layout="wide", page_icon="📈")
 
-# --- ESTILO CSS DARK 2.0 ---
+# --- ESTILO CSS DARK 2.0 (VISUAL PREMIUM) ---
 st.markdown("""
     <style>
     .stApp { background-color: #0f172a; }
@@ -16,18 +22,19 @@ st.markdown("""
     }
     [data-testid="stSidebar"] * { color: #f1f5f9 !important; }
 
+    /* Estilização dos campos de entrada */
     div[data-baseweb="input"] {
         background-color: #020617 !important;
         border: 2px solid #334155 !important;
         border-radius: 10px !important;
     }
-    
     input {
         color: #f1f5f9 !important;
         -webkit-text-fill-color: #f1f5f9 !important;
         font-weight: bold !important;
     }
 
+    /* Cards de métricas com efeito Glow */
     div[data-testid="stMetric"] {
         background-color: #1e293b;
         padding: 20px;
@@ -38,10 +45,20 @@ st.markdown("""
     div[data-testid="stMetricLabel"] { color: #94a3b8 !important; font-weight: bold !important; text-transform: uppercase; }
     div[data-testid="stMetricValue"] { color: #ffffff !important; font-size: 28px !important; }
 
+    /* Expanders (Blocos de Gastos) */
     div[data-testid="stExpander"] {
         background-color: #1e293b !important;
         border: 1px solid #334155 !important;
         border-radius: 12px !important;
+    }
+    
+    /* Botões */
+    .stButton>button {
+        background-color: #2563eb !important;
+        color: white !important;
+        border-radius: 8px !important;
+        font-weight: bold !important;
+        width: 100%;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -67,32 +84,36 @@ if 'db' not in st.session_state:
 if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
 
 if not st.session_state['logged_in']:
-    st.title("📈 MetaFluxo Login")
+    st.title("📈 MetaFlux Login")
     u = st.text_input("Usuário")
     p = st.text_input("Senha", type="password")
-    if st.button("Entrar"):
+    if st.button("Acessar Painel"):
         if u in st.session_state.db["users"] and st.session_state.db["users"][u]["password"] == p:
             st.session_state['logged_in'] = True
             st.session_state['current_user'] = u
             st.rerun()
         else: st.error("Acesso negado.")
 else:
+    # --- BARRA LATERAL (SIDEBAR) ---
     with st.sidebar:
-        st.title("📈 MetaFluxo")
+        # AQUI É ONDE O SEU LOGO APARECE
+        try:
+            st.image("logo.png", use_column_width=True)
+        except:
+            st.title("📈 METAFLUX")
+            
+        st.divider()
         privacidade = st.toggle("👁️ Modo Privacidade")
         st.divider()
-        mes = st.selectbox("Mês", ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"], index=3)
+        mes = st.selectbox("Mês de Referência", ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"], index=3)
         
-        # --- AQUI ESTÁ A SOLUÇÃO DEFINITIVA ---
+        # --- PRIVACIDADE BLINDADA ---
         if privacidade:
-            # Se a privacidade estiver ON, usamos text_input com tipo password para esconder com bolinhas
             st.text_input("🔐 RENDA (OCULTA)", value="******", disabled=True)
             st.text_input("🔐 META (OCULTA)", value="******", disabled=True)
-            # Mantemos os valores reais em variáveis escondidas para o cálculo não quebrar
-            renda = 3000.0 
+            renda = 3000.0 # Valor padrão para cálculos internos
             meta_inv = 1000.0
         else:
-            # Se a privacidade estiver OFF, mostra os campos normais para você editar
             renda = st.number_input("Sua Renda (R$)", value=3000.0, format="%.2f")
             meta_inv = st.number_input("Meta Investimento (R$)", value=1000.0, format="%.2f")
         
@@ -113,7 +134,9 @@ else:
     total_sonhos = sum(float(s['acumulado']) for s in st.session_state.db.get('metas_sonhos', []))
     saldo = renda - t_pago - t_pend - inv_mes
 
-    st.title(f"🚀 Dashboard Financeiro - {mes}")
+    st.title(f"🚀 Dashboard {mes}")
+    
+    # Cards métricos
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("✅ PAGOS", fmt(t_pago))
     c2.metric("⏳ PENDENTES", fmt(t_pend))
@@ -149,7 +172,7 @@ else:
                 st.rerun()
 
     with col_g:
-        st.subheader("📊 Raio-X do Dinheiro")
+        st.subheader("📊 Raio-X Financeiro")
         labels = ["Pago", "Pendente", "Investido", "Sonhos", "Saldo Livre"]
         valores = [t_pago, t_pend, inv_mes, total_sonhos, max(0, saldo)]
         
@@ -167,7 +190,7 @@ else:
                               paper_bgcolor='rgba(0,0,0,0)', font_color="white")
             st.plotly_chart(fig, use_container_width=True)
             
-    # --- SONHOS ---
+    # --- SEÇÃO DE SONHOS ---
     st.divider()
     st.subheader("🚀 Meus Sonhos")
     s1, s2 = st.columns([1, 2])
@@ -175,7 +198,7 @@ else:
         with st.form("f_sonho"):
             n_s = st.text_input("Qual o Sonho?")
             v_alvo = st.number_input("Meta (R$)", min_value=0.0, format="%.2f")
-            if st.form_submit_button("Criar Sonho"):
+            if st.form_submit_button("Criar Objetivo"):
                 st.session_state.db['metas_sonhos'].append({"nome": n_s, "alvo": v_alvo, "acumulado": 0.0})
                 salvar_banco(st.session_state.db)
                 st.rerun()
