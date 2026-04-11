@@ -12,63 +12,54 @@ try:
 except:
     st.set_page_config(page_title="MetaFlux Pro 📈", layout="wide", page_icon="📈")
 
-# --- ESTILO CSS DARK PRO ---
+# --- ESTILO CSS AVANÇADO (MERCADO) ---
 st.markdown("""
     <style>
     .stApp { background-color: #0f172a; }
     
-    .login-container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding-top: 20px;
+    /* Centralização Responsiva */
+    .auth-container {
+        max-width: 400px;
+        margin: auto;
+        padding: 40px 20px;
+        text-align: center;
     }
 
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #1e3a8a 0%, #020617 100%);
-        padding-top: 1rem;
-    }
-    [data-testid="stSidebar"] * { color: #f1f5f9 !important; }
-
-    div[data-baseweb="input"] {
-        background-color: #020617 !important;
-        border: 2px solid #334155 !important;
-        border-radius: 10px !important;
-    }
-    input {
-        color: #f1f5f9 !important;
-        -webkit-text-fill-color: #f1f5f9 !important;
-        font-weight: bold !important;
-    }
-
-    div[data-testid="stMetric"] {
-        background-color: #1e293b;
-        padding: 20px;
-        border-radius: 15px;
-        box-shadow: 0 0 15px rgba(59, 130, 246, 0.2);
-        border-left: 5px solid #60a5fa;
     }
     
-    .stProgress > div > div > div > div {
-        background-image: linear-gradient(to right, #3b82f6 , #2ecc71);
+    /* Inputs Modernos */
+    div[data-baseweb="input"] {
+        background-color: #020617 !important;
+        border: 1px solid #334155 !important;
+        border-radius: 8px !important;
     }
+    input { color: #f1f5f9 !important; font-weight: bold !important; }
 
+    /* Botão Principal Estilo SaaS */
     .stButton>button {
         background-color: #2563eb !important;
         color: white !important;
-        border-radius: 10px !important;
-        font-weight: bold !important;
-        width: 100%;
+        border-radius: 8px !important;
+        padding: 10px 20px !important;
+        font-weight: 600 !important;
         border: none !important;
+        transition: 0.3s;
     }
-    
-    /* Links de rodapé do login */
-    .login-footer {
-        text-align: center;
-        margin-top: 15px;
-        font-size: 0.9rem;
+    .stButton>button:hover { background-color: #3b82f6 !important; box-shadow: 0 0 15px rgba(59,130,246,0.4); }
+
+    /* Escondendo os botões de link padrão para parecerem links reais */
+    .link-button button {
+        background: none !important;
+        border: none !important;
+        color: #94a3b8 !important;
+        text-decoration: underline !important;
+        font-size: 0.85rem !important;
+        font-weight: normal !important;
+        width: auto !important;
     }
+    .link-button button:hover { color: #f1f5f9 !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -93,82 +84,91 @@ def salvar_banco(dados):
 if 'db' not in st.session_state:
     st.session_state.db = carregar_banco()
 
-# --- ESTADOS DE TELA ---
+# --- ESTADOS DE SESSÃO ---
 if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
-if 'auth_mode' not in st.session_state: st.session_state['auth_mode'] = 'login' # login, signup, recover
-
-# --- FUNÇÕES DE NAVEGAÇÃO ---
-def mudar_modo(modo):
-    st.session_state['auth_mode'] = modo
-    st.rerun()
+if 'auth_mode' not in st.session_state: st.session_state['auth_mode'] = 'login'
+if 'login_error' not in st.session_state: st.session_state['login_error'] = False
 
 # --- TELA DE AUTENTICAÇÃO ---
 if not st.session_state['logged_in']:
-    col_l1, col_l2, col_l3 = st.columns([1, 1, 1])
+    # Container centralizado responsivo
+    _, center_col, _ = st.columns([1, 2, 1])
     
-    with col_l2:
-        st.markdown('<div class="login-container">', unsafe_allow_html=True)
-        try: st.image("logo.png", width=180)
-        except: st.title("📈 MetaFlux")
+    with center_col:
+        st.markdown('<div class="auth-container">', unsafe_allow_html=True)
+        try:
+            # Aumentado o tamanho do logo para 250px
+            st.image("logo.png", width=250)
+        except:
+            st.title("📈 MetaFlux")
         
         # MODO LOGIN
         if st.session_state['auth_mode'] == 'login':
-            st.subheader("Login")
-            u = st.text_input("Usuário")
-            p = st.text_input("Senha", type="password")
+            u = st.text_input("Usuário", placeholder="Digite seu usuário")
+            p = st.text_input("Senha", type="password", placeholder="Digite sua senha")
+            
             if st.button("Acessar Painel"):
                 if u in st.session_state.db["users"] and st.session_state.db["users"][u]["password"] == p:
                     st.session_state['logged_in'] = True
                     st.session_state['current_user'] = u
+                    st.session_state['login_error'] = False
                     st.rerun()
-                else: st.error("Dados incorretos.")
+                else:
+                    st.session_state['login_error'] = True
             
-            st.markdown('<div class="login-footer">', unsafe_allow_html=True)
-            if st.button("Não tem conta? Cadastre-se", key="go_signup"): mudar_modo('signup')
-            if st.button("Esqueci minha senha", key="go_recover"): mudar_modo('recover')
+            if st.session_state['login_error']:
+                st.error("Usuário ou senha incorretos.")
+                st.markdown('<div class="link-button">', unsafe_allow_html=True)
+                if st.button("Esqueci minha senha"): st.session_state['auth_mode'] = 'recover'; st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            st.markdown('<div class="link-button" style="margin-top:20px;">', unsafe_allow_html=True)
+            if st.button("Não tem conta? Crie uma aqui"): st.session_state['auth_mode'] = 'signup'; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
         # MODO CADASTRO
         elif st.session_state['auth_mode'] == 'signup':
-            st.subheader("Novo Cadastro")
-            new_u = st.text_input("Escolha um Usuário")
-            new_p = st.text_input("Escolha uma Senha", type="password")
-            new_s = st.text_input("Resposta de Segurança (Nome do seu filho?)")
+            st.subheader("Criar conta")
+            new_u = st.text_input("Novo Usuário")
+            new_p = st.text_input("Nova Senha", type="password")
+            new_s = st.text_input("Qual o nome do seu filho?")
             
-            if st.button("Criar Conta"):
+            if st.button("Cadastrar"):
                 if new_u and new_p and new_s:
                     st.session_state.db["users"][new_u] = {"password": new_p, "security_answer": new_s}
                     salvar_banco(st.session_state.db)
-                    st.success("Conta criada! Pode logar.")
-                    mudar_modo('login')
-                else: st.warning("Preencha todos os campos.")
-            if st.button("Voltar ao Login"): mudar_modo('login')
+                    st.success("Cadastro realizado!")
+                    st.session_state['auth_mode'] = 'login'; st.rerun()
+            
+            st.markdown('<div class="link-button">', unsafe_allow_html=True)
+            if st.button("Voltar ao login"): st.session_state['auth_mode'] = 'login'; st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
 
         # MODO RECUPERAÇÃO
         elif st.session_state['auth_mode'] == 'recover':
-            st.subheader("Recuperar Senha")
-            rec_u = st.text_input("Informe seu Usuário")
+            st.subheader("Recuperação")
+            rec_u = st.text_input("Usuário cadastrado")
             if rec_u in st.session_state.db["users"]:
-                ans = st.text_input("Pergunta: Qual o nome do seu filho?")
-                if st.button("Revelar Senha"):
+                ans = st.text_input("Pergunta: Nome do filho?")
+                if st.button("Verificar"):
                     if ans.lower() == st.session_state.db["users"][rec_u]["security_answer"].lower():
                         st.info(f"Sua senha é: {st.session_state.db['users'][rec_u]['password']}")
-                    else: st.error("Resposta incorreta.")
-            else: st.warning("Usuário não encontrado.")
-            if st.button("Voltar ao Login"): mudar_modo('login')
+            
+            st.markdown('<div class="link-button">', unsafe_allow_html=True)
+            if st.button("Voltar ao login"): st.session_state['auth_mode'] = 'login'; st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
 
 else:
-    # --- INTERFACE PRINCIPAL (LOGADA) ---
+    # --- APP PRINCIPAL (LOGADO) ---
     with st.sidebar:
         try: st.image("logo.png", use_column_width=True)
         except: st.title("📈 METAFLUX")
-            
         st.divider()
         privacidade = st.toggle("👁️ Modo Privacidade")
         st.divider()
-        mes = st.selectbox("Mês de Referência", ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"], index=3)
+        mes = st.selectbox("Mês", ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"], index=3)
         
         if privacidade:
             st.text_input("🔐 RENDA (OCULTA)", value="******", disabled=True)
@@ -195,13 +195,13 @@ else:
     total_sonhos = sum(float(s['acumulado']) for s in st.session_state.db.get('metas_sonhos', []))
     saldo = renda - t_pago - t_pend - inv_mes
 
-    st.title(f"🚀 Dashboard de {mes}")
+    st.title(f"🚀 Dashboard {mes}")
     
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("✅ PAGOS", fmt(t_pago))
     c2.metric("⏳ PENDENTES", fmt(t_pend))
     c3.metric("🚀 MEUS SONHOS", fmt(total_sonhos)) 
-    c4.metric("💰 SALDO LIVRE", fmt(saldo))
+    c4.metric("💰 LIVRE", fmt(saldo))
 
     st.write("")
     prog_meta = min(inv_mes / meta_inv, 1.0) if meta_inv > 0 else 0.0
@@ -214,7 +214,7 @@ else:
     col_l, col_g = st.columns([1.4, 1])
     with col_l:
         st.subheader("📝 Lançamentos")
-        new_inv = st.number_input("Investimento do Mês (R$)", value=inv_mes, format="%.2f")
+        new_inv = st.number_input("Investido no Mês (R$)", value=inv_mes, format="%.2f")
         if new_inv != inv_mes:
             st.session_state.db[mes]['investido'] = new_inv
             salvar_banco(st.session_state.db)
@@ -242,16 +242,14 @@ else:
                 st.rerun()
 
     with col_g:
-        st.subheader("📊 Raio-X Financeiro")
+        st.subheader("📊 Gráfico")
         labels = ["Pago", "Pendente", "Investido", "Sonhos", "Saldo Livre"]
         valores = [t_pago, t_pend, inv_mes, total_sonhos, max(0, saldo)]
         df_p = pd.DataFrame({"Legenda": labels, "Valor": valores})
         df_p = df_p[df_p["Valor"] > 0]
 
         if not df_p.empty:
-            fig = px.pie(df_p, values='Valor', names='Legenda', hole=0.5,
-                         color='Legenda',
-                         color_discrete_map={"Pago": "#10b981", "Pendente": "#ef4444", "Investido": "#f59e0b", "Sonhos": "#8b5cf6", "Saldo Livre": "#3b82f6"})
+            fig = px.pie(df_p, values='Valor', names='Legenda', hole=0.5, color='Legenda', color_discrete_map={"Pago": "#10b981", "Pendente": "#ef4444", "Investido": "#f59e0b", "Sonhos": "#8b5cf6", "Saldo Livre": "#3b82f6"})
             t_inf = 'percent+label' if not privacidade else 'none'
             fig.update_traces(textinfo=t_inf, pull=[0, 0, 0, 0, 0.1])
             fig.update_layout(showlegend=(not privacidade), margin=dict(t=0,b=0,l=0,r=0), paper_bgcolor='rgba(0,0,0,0)', font_color="white")
@@ -262,8 +260,8 @@ else:
     s1, s2 = st.columns([1, 2])
     with s1:
         with st.form("f_sonho"):
-            n_s = st.text_input("Qual o Sonho?")
-            v_alvo = st.number_input("Meta (R$)", min_value=0.0, format="%.2f")
+            n_s = st.text_input("Nome do Sonho")
+            v_alvo = st.number_input("Valor Alvo (R$)", min_value=0.0, format="%.2f")
             if st.form_submit_button("Criar"):
                 st.session_state.db['metas_sonhos'].append({"nome": n_s, "alvo": v_alvo, "acumulado": 0.0})
                 salvar_banco(st.session_state.db)
@@ -281,8 +279,8 @@ else:
                     if privacidade:
                         c_d.text_input("Aportar", value="****", disabled=True, key=f"dp_{i}")
                     else:
-                        v_dep = c_d.number_input(f"Somar em {s['nome']}", value=0.0, format="%.2f", key=f"d_{i}")
-                        if c_d.button("Confirmar", key=f"b_{i}"):
+                        v_dep = c_d.number_input(f"Depositar", value=0.0, format="%.2f", key=f"d_{i}")
+                        if c_d.button("OK", key=f"b_{i}"):
                             s['acumulado'] += v_dep
                             salvar_banco(st.session_state.db)
                             st.rerun()
