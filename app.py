@@ -5,45 +5,69 @@ import plotly.express as px
 import pandas as pd
 
 # --- CONFIGURAÇÃO VISUAL ---
-st.set_page_config(page_title="MetaFluxo Premium 📈", layout="wide", page_icon="📈")
+st.set_page_config(page_title="MetaFluxo Dark Premium 📈", layout="wide", page_icon="📈")
 
-# --- ESTILO CSS À PROVA DE ERROS ---
+# --- ESTILO CSS DARK PREMIUM (MUDANÇA TOTAL DE VISUAL) ---
 st.markdown("""
     <style>
-    /* Fundo da página em cinza claro para destacar os blocos */
-    .stApp { background-color: #f1f5f9; }
+    /* FUNDO DA PÁGINA: Azul Metálico Escuro */
+    .stApp { background-color: #0f172a; }
     
-    /* Barra lateral com o gradiente azul que você gostou */
+    /* Barra lateral */
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #1e3a8a 0%, #0f172a 100%);
+        background: linear-gradient(180deg, #1e3a8a 0%, #020617 100%);
     }
-    [data-testid="stSidebar"] * { color: white !important; }
+    [data-testid="stSidebar"] * { color: #f1f5f9 !important; }
+
+    /* FORÇANDO VISIBILIDADE DOS INPUTS (Cores invertidas) */
+    div[data-baseweb="input"] {
+        background-color: #020617 !important; /* Preto profundo */
+        border: 2px solid #334155 !important;
+        border-radius: 10px !important;
+    }
     
-    /* FORÇANDO TEXTO PRETO EM TODOS OS CAMPOS DE DIGITAÇÃO */
+    /* TEXTO BRANCO NOS CAMPOS DE DIGITAÇÃO */
     input {
-        color: #000000 !important;
-        background-color: #ffffff !important;
+        color: #f1f5f9 !important;
+        -webkit-text-fill-color: #f1f5f9 !important;
         font-weight: bold !important;
     }
-    
-    /* Estilizando os Cards de métricas superiores */
-    div[data-testid="stMetric"] {
-        background-color: #ffffff;
-        padding: 20px;
-        border-radius: 12px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        border-bottom: 4px solid #3b82f6;
-    }
-    div[data-testid="stMetricLabel"] { color: #334155 !important; font-weight: bold !important; }
-    div[data-testid="stMetricValue"] { color: #000000 !important; }
 
-    /* Expanders (Blocos de gastos) sempre com fundo branco e texto preto */
-    div[data-testid="stExpander"] {
-        background-color: #ffffff !important;
-        border-radius: 10px !important;
-        border: 1px solid #cbd5e1 !important;
+    /* Estilo dos Cards (Métricas superiores) */
+    div[data-testid="stMetric"] {
+        background-color: #1e293b; /* Preto Azulado */
+        padding: 20px;
+        border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        border-bottom: 5px solid #60a5fa; /* Borda Azul Neon */
     }
-    .st-expanderContent { color: #000000 !important; }
+    div[data-testid="stMetricLabel"] { color: #cbd5e1 !important; font-weight: bold !important; }
+    div[data-testid="stMetricValue"] { color: #ffffff !important; }
+
+    /* Expanders (Blocos de Gastos) */
+    div[data-testid="stExpander"] {
+        background-color: #1e293b !important; /* Preto Azulado */
+        border: 1px solid #334155 !important;
+        border-radius: 12px !important;
+        color: #f1f5f9 !important;
+    }
+    .st-expanderHeader { color: #f1f5f9 !important; font-weight: bold !important; }
+    .st-expanderContent { color: #f1f5f9 !important; background-color: #1e293b !important; }
+
+    /* Botão Principal */
+    .stButton>button {
+        background-color: #1d4ed8 !important; /* Azul Real */
+        color: #ffffff !important;
+        border-radius: 10px !important;
+        font-weight: bold !important;
+        border: none !important;
+    }
+    .stButton>button:hover {
+        background-color: #3b82f6 !important; /* Azul Neon no hover */
+    }
+    
+    /* Títulos da Página */
+    h1, h2, h3 { color: #f1f5f9 !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -68,30 +92,26 @@ if 'db' not in st.session_state:
 if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
 
 if not st.session_state['logged_in']:
-    st.title("📈 MetaFluxo")
-    u = st.text_input("Usuário")
-    p = st.text_input("Senha", type="password")
-    if st.button("Entrar"):
+    st.title("📈 MetaFluxo Dark")
+    u = st.text_input("Usuário", placeholder="Seu usuário")
+    p = st.text_input("Senha", type="password", placeholder="Sua senha")
+    if st.button("Acessar Sistema"):
         if u in st.session_state.db["users"] and st.session_state.db["users"][u]["password"] == p:
             st.session_state['logged_in'] = True
             st.session_state['current_user'] = u
             st.rerun()
         else: st.error("Acesso negado.")
 else:
+    # --- INTERFACE ---
     with st.sidebar:
         st.title("📈 MetaFluxo")
         privacidade = st.toggle("👁️ Modo Privacidade")
         st.divider()
-        mes = st.selectbox("Mês", ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"], index=3)
-        
-        lbl_renda = "Sua Renda (R$)" if not privacidade else "Renda (OCULTO)"
-        renda = st.number_input(lbl_renda, value=3000.0, format="%.2f")
-        
-        lbl_meta = "Meta Investimento" if not privacidade else "Meta (OCULTO)"
-        meta_inv = st.number_input(lbl_meta, value=1000.0, format="%.2f")
-        
+        mes = st.selectbox("Mês de Referência", ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"], index=3)
+        renda = st.number_input("Sua Renda (R$)" if not privacidade else "Renda (OCULTO)", value=3000.0, format="%.2f")
+        meta_inv = st.number_input("Meta Investimento" if not privacidade else "Meta (OCULTO)", value=1000.0, format="%.2f")
         st.divider()
-        if st.button("🚪 Sair"):
+        if st.button("🚪 Sair do Sistema"):
             st.session_state['logged_in'] = False
             st.rerun()
 
@@ -118,8 +138,8 @@ else:
 
     col_l, col_g = st.columns([1.5, 1])
     with col_l:
-        st.subheader("📝 Gastos")
-        if st.button("➕ Adicionar Gasto"):
+        st.subheader("📝 Gestão de Gastos")
+        if st.button("➕ Novo Bloco"):
             st.session_state.db[mes]["gastos"].append({"item": "Novo", "valor": 0.0, "pago": False, "cat": "🛠️ Outros"})
             st.rerun()
         
@@ -128,7 +148,7 @@ else:
             for i, g in enumerate(d_mes["gastos"]):
                 with st.expander(f"📦 {g['item']} - {fmt(g['valor'])}", expanded=True):
                     ca1, ca2, ca3 = st.columns([2, 1, 1])
-                    g["item"] = ca1.text_input("Item", g["item"], key=f"it_{mes}_{i}")
+                    g["item"] = ca1.text_input("O que é?", g["item"], key=f"it_{mes}_{i}")
                     g["valor"] = ca2.number_input("Valor", value=float(g["valor"]), key=f"vl_{mes}_{i}", format="%.2f")
                     g["pago"] = ca3.checkbox("Pago?", value=g["pago"], key=f"ck_{mes}_{i}")
                     if st.button("🗑️ Deletar", key=f"del_{mes}_{i}"): idx_del = i
@@ -138,10 +158,10 @@ else:
                 st.rerun()
 
     with col_g:
-        st.subheader("📊 Gráfico")
+        st.subheader("📊 Gráfico Financeiro")
         df_p = pd.DataFrame({"Legenda": ["Pago", "Pendente", "Investido", "Sonhos", "Livre"], "Valor": [t_pago, t_pend, inv_mes, total_sonhos, max(0, saldo)]})
         fig = px.pie(df_p[df_p["Valor"] > 0], values='Valor', names='Legenda', hole=0.6, color='Legenda', color_discrete_map={"Pago": "#2ecc71", "Pendente": "#e74c3c", "Investido": "#f1c40f", "Sonhos": "#9b59b6", "Livre": "#3498db"})
-        fig.update_layout(showlegend=False, margin=dict(t=0,b=0,l=0,r=0))
+        fig.update_layout(showlegend=False, margin=dict(t=0,b=0,l=0,r=0), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig, use_container_width=True)
 
     st.divider()
@@ -150,7 +170,7 @@ else:
     with s1:
         with st.form("f_sonho"):
             n_s = st.text_input("Qual o Sonho?")
-            v_alvo = st.number_input("Meta", min_value=0.0, format="%.2f")
+            v_alvo = st.number_input("Meta Total", min_value=0.0, format="%.2f")
             if st.form_submit_button("Criar"):
                 st.session_state.db['metas_sonhos'].append({"nome": n_s, "alvo": v_alvo, "acumulado": 0.0})
                 salvar_banco(st.session_state.db)
@@ -165,8 +185,8 @@ else:
                     c_i, c_d, c_x = st.columns([2, 2, 0.5])
                     c_i.write(f"Guardado: {fmt(acum)}")
                     c_i.progress(prog)
-                    v_dep = c_d.number_input(f"Somar em {s['nome']}", value=0.0, format="%.2f", key=f"d_{i}")
-                    if c_d.button("Confirmar", key=f"b_{i}"):
+                    v_dep = c_d.number_input(f"Depositar em {s['nome']}", value=0.0, format="%.2f", key=f"d_{i}")
+                    if c_d.button("Confirmar Depósito", key=f"b_{i}"):
                         s['acumulado'] += v_dep
                         salvar_banco(st.session_state.db)
                         st.rerun()
