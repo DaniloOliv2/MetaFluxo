@@ -56,8 +56,9 @@ else:
         privacidade = st.toggle("👁️ Modo Privacidade")
         st.divider()
         mes = st.selectbox("Mês de Referência", ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"], index=3)
-        renda = st.number_input("Sua Renda (R$)", value=3000.0, step=100.0)
-        meta_inv = st.number_input("Meta de Investimento (R$)", value=1000.0, step=50.0)
+        # CORREÇÃO: Permitindo valores altos na Renda e Metas
+        renda = st.number_input("Sua Renda (R$)", value=3000.0, step=100.0, format="%.2f")
+        meta_inv = st.number_input("Meta de Investimento (R$)", value=1000.0, step=50.0, format="%.2f")
         st.divider()
         if st.button("🚪 Sair"):
             st.session_state['logged_in'] = False
@@ -112,7 +113,8 @@ else:
                     ca1, ca2, ca3, ca4 = st.columns([2, 1.5, 1, 0.5])
                     gasto["item"] = ca1.text_input("Item", gasto["item"], key=f"it_{mes}_{i}")
                     gasto["cat"] = ca2.selectbox("Cat", categorias_lista, index=categorias_lista.index(gasto.get("cat", "🛠️ Outros")), key=f"ct_{mes}_{i}")
-                    gasto["valor"] = ca3.number_input("Valor", value=float(gasto["valor"]), key=f"vl_{mes}_{i}")
+                    # CORREÇÃO: Valor sem limite baixo
+                    gasto["valor"] = ca3.number_input("Valor", value=float(gasto["valor"]), key=f"vl_{mes}_{i}", format="%.2f")
                     gasto["pago"] = ca4.checkbox("Pago?", value=gasto["pago"], key=f"ck_{mes}_{i}")
                     if st.button("🗑️", key=f"del_{mes}_{i}"): idx_del = i
             
@@ -123,19 +125,18 @@ else:
 
     with col_graf:
         st.subheader("📊 Distribuição Total")
-        # Campo para atualizar o investimento direto aqui também
-        novo_inv = st.number_input("Valor Investido este mês:", value=float(investido), step=50.0, key="input_inv_total")
+        # CORREÇÃO: Valor investido aceitando grandes quantias
+        novo_inv = st.number_input("Valor Investido este mês:", value=float(investido), step=50.0, key="input_inv_total", format="%.2f")
         if novo_inv != investido:
             dados_mes["investido"] = novo_inv
             st.rerun()
 
-        # Dados do Gráfico
         data = {
             "Destino": ["Pago", "Pendente", "Investido", "Saldo Livre"],
             "Valor": [total_pago, total_pendente, novo_inv, max(0, saldo_livre)]
         }
         df_p = pd.DataFrame(data)
-        df_p = df_p[df_p["Valor"] > 0] # Remove o que for zero
+        df_p = df_p[df_p["Valor"] > 0]
 
         if not df_p.empty:
             fig = px.pie(df_p, values='Valor', names='Destino', hole=0.5,
@@ -144,25 +145,41 @@ else:
             fig.update_layout(margin=dict(t=0, b=0, l=0, r=0))
             st.plotly_chart(fig, use_container_width=True)
 
-    # --- SEÇÃO DE SONHOS ---
+    # --- SEÇÃO DE SONHOS (COM ROLAGEM E VALORES ALTOS) ---
     st.divider()
-    st.subheader("🚀 Meus Sonhos")
+    st.subheader("🚀 Meus Sonhos e Objetivos")
     if 'metas_sonhos' not in st.session_state.db: st.session_state.db['metas_sonhos'] = []
     
     s_col1, s_col2 = st.columns([1, 2])
     with s_col1:
         with st.form("form_sonho"):
-            n_s = st.text_input("Novo Sonho")
-            v_s = st.number_input("Valor Total", min_value=0.0)
-            if st.form_submit_button("Adicionar"):
+            n_s = st.text_input("Qual o seu sonho? (Ex: Terreno)")
+            # CORREÇÃO: Valor alvo agora aceita 40.000,00 ou mais
+            v_s = st.number_input("Quanto custa no total?", min_value=0.0, step=100.0, format="%.2f")
+            if st.form_submit_button("Adicionar Objetivo"):
                 st.session_state.db['metas_sonhos'].append({"nome": n_s, "alvo": v_s, "acumulado": 0.0})
                 salvar_banco(st.session_state.db)
                 st.rerun()
+    
     with s_col2:
-        for s in st.session_state.db['metas_sonhos']:
-            p = min(s['acumulado'] / s['alvo'], 1.0) if s['alvo'] > 0 else 0.0
-            st.write(f"**{s['nome']}** ({fmt(s['acumulado'])} / {fmt(s['alvo'])})")
-            st.progress(p)
-            s['acumulado'] = st.number_input(f"Aportar em {s['nome']}", value=float(s['acumulado']), key=f"snk_{s['nome']}")
+        # CORREÇÃO: Adicionada Janela de Rolagem para os Sonhos
+        with st.container(height=350):
+            idx_sonho_del = None
+            for i, s in enumerate(st.session_state.db['metas_sonhos']):
+                p = min(s['acumulado'] / s['alvo'], 1.0) if s['alvo'] > 0 else 0.0
+                
+                with st.expander(f"⭐ {s['nome']} - {p*100:.1f}%"):
+                    col_info, col_aporta, col_del = st.columns([3, 2, 0.5])
+                    col_info.write(f"Progresso: **{fmt(s['acumulado'])}** de **{fmt(s['alvo'])}**")
+                    col_info.progress(p)
+                    # CORREÇÃO: Aporte aceitando valores altos
+                    s['acumulado'] = col_aporta.number_input(f"Aportar em {s['nome']}", value=float(s['acumulado']), key=f"snk_{i}", format="%.2f")
+                    if col_del.button("🗑️", key=f"del_sonho_{i}"):
+                        idx_sonho_del = i
+            
+            if idx_sonho_del is not None:
+                st.session_state.db['metas_sonhos'].pop(idx_sonho_del)
+                salvar_banco(st.session_state.db)
+                st.rerun()
 
     salvar_banco(st.session_state.db)
