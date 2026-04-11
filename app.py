@@ -3,26 +3,80 @@ import json
 import os
 import plotly.express as px
 import pandas as pd
-from PIL import Image
 
 # --- CONFIGURAÇÃO VISUAL ---
-# O ícone da aba do navegador (favicon) também usará o seu logo
-try:
-    img_logo = Image.open("logo.png")
-    st.set_page_config(page_title="MetaFlux Pro 📈", layout="wide", page_icon=img_logo)
-except:
-    st.set_page_config(page_title="MetaFlux Pro 📈", layout="wide", page_icon="📈")
+st.set_page_config(page_title="MetaFlux Pro 📈", layout="wide", page_icon="📈")
 
-# --- ESTILO CSS DARK 2.0 (VISUAL PREMIUM) ---
+# --- ESTILO CSS DARK PRO (LOGO DE CÓDIGO E CORREÇÕES) ---
 st.markdown("""
     <style>
     .stApp { background-color: #0f172a; }
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #1e3a8a 0%, #020617 100%);
+        padding-top: 0rem; /* Ajuste para o logo ficar no topo */
     }
     [data-testid="stSidebar"] * { color: #f1f5f9 !important; }
 
-    /* Estilização dos campos de entrada */
+    /* --- A MÁGICA: LOGO DE CÓDIGO (NÃO PRECISA DE ARQUIVO) --- */
+    .custom-logo {
+        width: 130px;
+        height: 130px;
+        background-color: transparent;
+        border: 6px solid #60a5fa; /* Anel Azul Claro */
+        border-radius: 50%;
+        margin: 20px auto 10px auto;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        position: relative;
+        box-shadow: 0 0 15px rgba(96, 165, 250, 0.5); /* Glow */
+    }
+    
+    .logo-seta {
+        width: 0;
+        height: 0;
+        border-left: 30px solid transparent;
+        border-right: 30px solid transparent;
+        border-bottom: 50px solid #2ecc71; /* Seta Verde */
+        position: relative;
+        transform: translateY(-5px);
+    }
+    
+    .logo-borda-seta {
+        width: 0;
+        height: 0;
+        border-left: 35px solid transparent;
+        border-right: 35px solid transparent;
+        border-bottom: 55px solid #60a5fa; /* Borda da Seta */
+        position: absolute;
+        top: -20px;
+        left: -35px;
+        z-index: -1;
+    }
+    
+    .logo-texto-arc {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        color: #f1f5f9;
+        font-family: sans-serif;
+        font-weight: bold;
+        font-size: 14px;
+        text-align: center;
+        text-transform: uppercase;
+    }
+    
+    /* Curvando o texto no anel */
+    .logo-text-p {
+        margin: 0;
+        position: absolute;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%) rotate(-70deg);
+        transform-origin: 50% 65px;
+    }
+    /* --- FIM DA MÁGICA DO LOGO --- */
+
     div[data-baseweb="input"] {
         background-color: #020617 !important;
         border: 2px solid #334155 !important;
@@ -34,7 +88,6 @@ st.markdown("""
         font-weight: bold !important;
     }
 
-    /* Cards de métricas com efeito Glow */
     div[data-testid="stMetric"] {
         background-color: #1e293b;
         padding: 20px;
@@ -45,18 +98,16 @@ st.markdown("""
     div[data-testid="stMetricLabel"] { color: #94a3b8 !important; font-weight: bold !important; text-transform: uppercase; }
     div[data-testid="stMetricValue"] { color: #ffffff !important; font-size: 28px !important; }
 
-    /* Expanders (Blocos de Gastos) */
     div[data-testid="stExpander"] {
         background-color: #1e293b !important;
         border: 1px solid #334155 !important;
         border-radius: 12px !important;
     }
     
-    /* Botões */
     .stButton>button {
         background-color: #2563eb !important;
         color: white !important;
-        border-radius: 8px !important;
+        border-radius: 10px !important;
         font-weight: bold !important;
         width: 100%;
     }
@@ -96,22 +147,27 @@ if not st.session_state['logged_in']:
 else:
     # --- BARRA LATERAL (SIDEBAR) ---
     with st.sidebar:
-        # AQUI É ONDE O SEU LOGO APARECE
-        try:
-            st.image("logo.png", use_column_width=True)
-        except:
-            st.title("📈 METAFLUX")
+        # AQUI É ONDE O LOGO DE CÓDIGO APARECE
+        st.markdown("""
+            <div class="custom-logo">
+                <div class="logo-texto-arc">
+                    <p class="logo-text-p">M E T A F L U X</p>
+                </div>
+                <div class="logo-seta">
+                    <div class="logo-borda-seta"></div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
             
         st.divider()
         privacidade = st.toggle("👁️ Modo Privacidade")
         st.divider()
         mes = st.selectbox("Mês de Referência", ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"], index=3)
         
-        # --- PRIVACIDADE BLINDADA ---
         if privacidade:
             st.text_input("🔐 RENDA (OCULTA)", value="******", disabled=True)
             st.text_input("🔐 META (OCULTA)", value="******", disabled=True)
-            renda = 3000.0 # Valor padrão para cálculos internos
+            renda = 3000.0 
             meta_inv = 1000.0
         else:
             renda = st.number_input("Sua Renda (R$)", value=3000.0, format="%.2f")
@@ -136,11 +192,11 @@ else:
 
     st.title(f"🚀 Dashboard {mes}")
     
-    # Cards métricos
+    # Cards métricos - CORREÇÃO DE TEXTO: "🚀 MEUS SONHOS"
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("✅ PAGOS", fmt(t_pago))
     c2.metric("⏳ PENDENTES", fmt(t_pend))
-    c3.metric("⭐ NOS SONHOS", fmt(total_sonhos))
+    c3.metric("🚀 MEUS SONHOS", fmt(total_sonhos)) # Antes era "NOS SONHOS"
     c4.metric("💰 SALDO LIVRE", fmt(saldo))
 
     st.divider()
@@ -173,6 +229,7 @@ else:
 
     with col_g:
         st.subheader("📊 Raio-X Financeiro")
+        # CORREÇÃO DE TEXTO NO GRÁFICO: "Sonhos" (Não muda, já tá certo)
         labels = ["Pago", "Pendente", "Investido", "Sonhos", "Saldo Livre"]
         valores = [t_pago, t_pend, inv_mes, total_sonhos, max(0, saldo)]
         
@@ -192,7 +249,8 @@ else:
             
     # --- SEÇÃO DE SONHOS ---
     st.divider()
-    st.subheader("🚀 Meus Sonhos")
+    # CORREÇÃO DE TEXTO: "🚀 Meus Sonhos"
+    st.subheader("🚀 Meus Sonhos") # Antes era "🚀 Nos Sonhos"
     s1, s2 = st.columns([1, 2])
     with s1:
         with st.form("f_sonho"):
