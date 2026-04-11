@@ -3,79 +3,25 @@ import json
 import os
 import plotly.express as px
 import pandas as pd
+from PIL import Image
 
-# --- CONFIGURAÇÃO VISUAL ---
-st.set_page_config(page_title="MetaFlux Pro 📈", layout="wide", page_icon="📈")
+# --- CONFIGURAÇÃO VISUAL (Favicon e Título) ---
+try:
+    # Usando o arquivo que você subiu
+    img_favicon = Image.open("favicon.jpg")
+    st.set_page_config(page_title="MetaFlux Pro 📈", layout="wide", page_icon=img_favicon)
+except:
+    st.set_page_config(page_title="MetaFlux Pro 📈", layout="wide", page_icon="📈")
 
-# --- ESTILO CSS DARK PRO (LOGO DE CÓDIGO E CORREÇÕES) ---
+# --- ESTILO CSS DARK PRO ---
 st.markdown("""
     <style>
     .stApp { background-color: #0f172a; }
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #1e3a8a 0%, #020617 100%);
-        padding-top: 0rem; /* Ajuste para o logo ficar no topo */
+        padding-top: 1rem;
     }
     [data-testid="stSidebar"] * { color: #f1f5f9 !important; }
-
-    /* --- A MÁGICA: LOGO DE CÓDIGO (NÃO PRECISA DE ARQUIVO) --- */
-    .custom-logo {
-        width: 130px;
-        height: 130px;
-        background-color: transparent;
-        border: 6px solid #60a5fa; /* Anel Azul Claro */
-        border-radius: 50%;
-        margin: 20px auto 10px auto;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        position: relative;
-        box-shadow: 0 0 15px rgba(96, 165, 250, 0.5); /* Glow */
-    }
-    
-    .logo-seta {
-        width: 0;
-        height: 0;
-        border-left: 30px solid transparent;
-        border-right: 30px solid transparent;
-        border-bottom: 50px solid #2ecc71; /* Seta Verde */
-        position: relative;
-        transform: translateY(-5px);
-    }
-    
-    .logo-borda-seta {
-        width: 0;
-        height: 0;
-        border-left: 35px solid transparent;
-        border-right: 35px solid transparent;
-        border-bottom: 55px solid #60a5fa; /* Borda da Seta */
-        position: absolute;
-        top: -20px;
-        left: -35px;
-        z-index: -1;
-    }
-    
-    .logo-texto-arc {
-        position: absolute;
-        width: 100%;
-        height: 100%;
-        color: #f1f5f9;
-        font-family: sans-serif;
-        font-weight: bold;
-        font-size: 14px;
-        text-align: center;
-        text-transform: uppercase;
-    }
-    
-    /* Curvando o texto no anel */
-    .logo-text-p {
-        margin: 0;
-        position: absolute;
-        top: 0;
-        left: 50%;
-        transform: translateX(-50%) rotate(-70deg);
-        transform-origin: 50% 65px;
-    }
-    /* --- FIM DA MÁGICA DO LOGO --- */
 
     div[data-baseweb="input"] {
         background-color: #020617 !important;
@@ -110,6 +56,7 @@ st.markdown("""
         border-radius: 10px !important;
         font-weight: bold !important;
         width: 100%;
+        border: none !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -147,17 +94,12 @@ if not st.session_state['logged_in']:
 else:
     # --- BARRA LATERAL (SIDEBAR) ---
     with st.sidebar:
-        # AQUI É ONDE O LOGO DE CÓDIGO APARECE
-        st.markdown("""
-            <div class="custom-logo">
-                <div class="logo-texto-arc">
-                    <p class="logo-text-p">M E T A F L U X</p>
-                </div>
-                <div class="logo-seta">
-                    <div class="logo-borda-seta"></div>
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
+        # Carrega o seu logo principal
+        try:
+            img_logo = Image.open("logo.png")
+            st.image(img_logo, use_column_width=True)
+        except:
+            st.title("📈 METAFLUX")
             
         st.divider()
         privacidade = st.toggle("👁️ Modo Privacidade")
@@ -190,13 +132,13 @@ else:
     total_sonhos = sum(float(s['acumulado']) for s in st.session_state.db.get('metas_sonhos', []))
     saldo = renda - t_pago - t_pend - inv_mes
 
-    st.title(f"🚀 Dashboard {mes}")
+    st.title(f"🚀 Dashboard de {mes}")
     
-    # Cards métricos - CORREÇÃO DE TEXTO: "🚀 MEUS SONHOS"
+    # Cards métricos
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("✅ PAGOS", fmt(t_pago))
     c2.metric("⏳ PENDENTES", fmt(t_pend))
-    c3.metric("🚀 MEUS SONHOS", fmt(total_sonhos)) # Antes era "NOS SONHOS"
+    c3.metric("🚀 MEUS SONHOS", fmt(total_sonhos)) 
     c4.metric("💰 SALDO LIVRE", fmt(saldo))
 
     st.divider()
@@ -204,22 +146,20 @@ else:
     col_l, col_g = st.columns([1.4, 1])
     with col_l:
         st.subheader("📝 Gestão de Gastos")
-        if st.button("➕ Novo Bloco"):
+        if st.button("➕ Novo Gasto"):
             st.session_state.db[mes]["gastos"].append({"item": "Novo", "valor": 0.0, "pago": False})
             st.rerun()
         
         with st.container(height=450):
             idx_del = None
             for i, g in enumerate(d_mes["gastos"]):
-                with st.expander(f"📦 {g['item']} - {fmt(g['valor'])}"):
+                with st.expander(f"📦 {g['item']} - {fmt(g['valor'])}", expanded=True):
                     ca1, ca2, ca3 = st.columns([2, 1, 1])
                     g["item"] = ca1.text_input("Item", g["item"], key=f"it_{mes}_{i}")
-                    
                     if privacidade:
                         ca2.text_input("Valor", value="****", disabled=True, key=f"vlp_{mes}_{i}")
                     else:
                         g["valor"] = ca2.number_input("Valor", value=float(g["valor"]), key=f"vl_{mes}_{i}", format="%.2f")
-                    
                     g["pago"] = ca3.checkbox("Pago?", value=g["pago"], key=f"ck_{mes}_{i}")
                     if st.button("🗑️ Deletar", key=f"del_{mes}_{i}"): idx_del = i
             if idx_del is not None:
@@ -229,10 +169,8 @@ else:
 
     with col_g:
         st.subheader("📊 Raio-X Financeiro")
-        # CORREÇÃO DE TEXTO NO GRÁFICO: "Sonhos" (Não muda, já tá certo)
         labels = ["Pago", "Pendente", "Investido", "Sonhos", "Saldo Livre"]
         valores = [t_pago, t_pend, inv_mes, total_sonhos, max(0, saldo)]
-        
         df_p = pd.DataFrame({"Legenda": labels, "Valor": valores})
         df_p = df_p[df_p["Valor"] > 0]
 
@@ -240,7 +178,6 @@ else:
             fig = px.pie(df_p, values='Valor', names='Legenda', hole=0.5,
                          color='Legenda',
                          color_discrete_map={"Pago": "#10b981", "Pendente": "#ef4444", "Investido": "#f59e0b", "Sonhos": "#8b5cf6", "Saldo Livre": "#3b82f6"})
-            
             texto_info = 'percent+label' if not privacidade else 'none'
             fig.update_traces(textinfo=texto_info, pull=[0, 0, 0, 0, 0.1])
             fig.update_layout(showlegend=(not privacidade), margin=dict(t=0,b=0,l=0,r=0), 
@@ -249,8 +186,7 @@ else:
             
     # --- SEÇÃO DE SONHOS ---
     st.divider()
-    # CORREÇÃO DE TEXTO: "🚀 Meus Sonhos"
-    st.subheader("🚀 Meus Sonhos") # Antes era "🚀 Nos Sonhos"
+    st.subheader("🚀 Meus Sonhos") 
     s1, s2 = st.columns([1, 2])
     with s1:
         with st.form("f_sonho"):
@@ -270,7 +206,6 @@ else:
                     c_i, c_d, c_x = st.columns([2, 2, 0.5])
                     c_i.write(f"Guardado: {fmt(acum)}")
                     c_i.progress(prog)
-                    
                     if privacidade:
                         c_d.text_input("Aportar", value="****", disabled=True, key=f"dp_{i}")
                     else:
@@ -279,7 +214,6 @@ else:
                             s['acumulado'] += v_dep
                             salvar_banco(st.session_state.db)
                             st.rerun()
-                            
                     if c_x.button("🗑️", key=f"x_{i}"): idx_s_del = i
             if idx_s_del is not None:
                 st.session_state.db['metas_sonhos'].pop(idx_s_del)
