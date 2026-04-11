@@ -21,6 +21,13 @@ st.markdown("""
         border: 2px solid #334155 !important;
         border-radius: 10px !important;
     }
+    
+    /* ESTILO PARA OCULTAR TEXTO QUANDO EM PRIVACIDADE */
+    .privado input {
+        color: transparent !important;
+        text-shadow: 0 0 10px #f1f5f9 !important; /* Cria um efeito de borrão nos números */
+    }
+    
     input {
         color: #f1f5f9 !important;
         -webkit-text-fill-color: #f1f5f9 !important;
@@ -90,12 +97,19 @@ else:
         st.divider()
         mes = st.selectbox("Mês", ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"], index=3)
         
-        # AJUSTE: O valor agora é mantido mesmo oculto para não quebrar o gráfico
+        # --- AQUI ESTÁ O AJUSTE DA PRIVACIDADE NOS CAMPOS ---
+        # Usamos uma "div" invisível para aplicar o CSS de borrão se a privacidade estiver ativa
+        if privacidade:
+            st.markdown('<div class="privado">', unsafe_allow_html=True)
+        
         lbl_renda = "Sua Renda (R$)" if not privacidade else "🔐 RENDA OCULTA"
         renda = st.number_input(lbl_renda, value=3000.0, format="%.2f")
         
         lbl_meta = "Meta Investimento" if not privacidade else "🔐 META OCULTA"
         meta_inv = st.number_input(lbl_meta, value=1000.0, format="%.2f")
+        
+        if privacidade:
+            st.markdown('</div>', unsafe_allow_html=True)
         
         st.divider()
         if st.button("🚪 Sair"):
@@ -136,7 +150,11 @@ else:
                 with st.expander(f"📦 {g['item']} - {fmt(g['valor'])}"):
                     ca1, ca2, ca3 = st.columns([2, 1, 1])
                     g["item"] = ca1.text_input("Item", g["item"], key=f"it_{mes}_{i}")
+                    
+                    if privacidade: st.markdown('<div class="privado">', unsafe_allow_html=True)
                     g["valor"] = ca2.number_input("Valor", value=float(g["valor"]), key=f"vl_{mes}_{i}", format="%.2f")
+                    if privacidade: st.markdown('</div>', unsafe_allow_html=True)
+                    
                     g["pago"] = ca3.checkbox("Pago?", value=g["pago"], key=f"ck_{mes}_{i}")
                     if st.button("🗑️ Deletar", key=f"del_{mes}_{i}"): idx_del = i
             if idx_del is not None:
@@ -157,7 +175,6 @@ else:
                          color='Legenda',
                          color_discrete_map={"Pago": "#10b981", "Pendente": "#ef4444", "Investido": "#f59e0b", "Sonhos": "#8b5cf6", "Saldo Livre": "#3b82f6"})
             
-            # AJUSTE: Esconde legendas do gráfico se a privacidade estiver ligada
             texto_info = 'percent+label' if not privacidade else 'none'
             fig.update_traces(textinfo=texto_info, pull=[0, 0, 0, 0, 0.1])
             
@@ -165,7 +182,6 @@ else:
                               paper_bgcolor='rgba(0,0,0,0)', font_color="white")
             st.plotly_chart(fig, use_container_width=True)
             
-            # Feedback de Saúde Financeira
             if not privacidade:
                 if t_pend > renda * 0.5:
                     st.markdown('<div class="saude-box" style="background-color: #7f1d1d; color: #fecaca;">⚠️ ALERTA: Gastos pendentes altos!</div>', unsafe_allow_html=True)
@@ -195,7 +211,11 @@ else:
                     c_i, c_d, c_x = st.columns([2, 2, 0.5])
                     c_i.write(f"Guardado: {fmt(acum)}")
                     c_i.progress(prog)
+                    
+                    if privacidade: st.markdown('<div class="privado">', unsafe_allow_html=True)
                     v_dep = c_d.number_input(f"Somar em {s['nome']}", value=0.0, format="%.2f", key=f"d_{i}")
+                    if privacidade: st.markdown('</div>', unsafe_allow_html=True)
+                    
                     if c_d.button("Confirmar", key=f"b_{i}"):
                         s['acumulado'] += v_dep
                         salvar_banco(st.session_state.db)
