@@ -24,7 +24,7 @@ def salvar_banco(dados):
 if 'db' not in st.session_state:
     st.session_state.db = carregar_banco()
 
-# --- LOGIN SIMPLIFICADO ---
+# --- LOGIN ---
 if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
 
 if not st.session_state['logged_in']:
@@ -37,14 +37,14 @@ if not st.session_state['logged_in']:
             st.session_state['current_user'] = u
             st.rerun()
 else:
-    # --- APP PRINCIPAL ---
     with st.sidebar:
         st.title("📈 MetaFluxo")
         privacidade = st.toggle("👁️ Modo Privacidade")
         st.divider()
         mes = st.selectbox("Mês", ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"], index=3)
-        renda = st.number_input("Sua Renda (R$)", value=3000.0, format="%.2f")
-        meta_inv = st.number_input("Meta de Investimento (R$)", value=1000.0, format="%.2f")
+        # AJUSTE: Renda agora aceita até 1 bilhão
+        renda = st.number_input("Sua Renda (R$)", value=3000.0, format="%.2f", step=1.0, min_value=0.0, max_value=1000000000.0)
+        meta_inv = st.number_input("Meta de Investimento (R$)", value=1000.0, format="%.2f", step=1.0, min_value=0.0, max_value=1000000000.0)
         if st.button("🚪 Sair"):
             st.session_state['logged_in'] = False
             st.rerun()
@@ -55,7 +55,7 @@ else:
     if mes not in st.session_state.db: st.session_state.db[mes] = {"gastos": [], "investido": 0.0}
     d_mes = st.session_state.db[mes]
 
-    # --- CARDS ---
+    # --- CÁLCULOS ---
     t_pago = sum(float(g['valor']) for g in d_mes['gastos'] if g['pago'])
     t_pend = sum(float(g['valor']) for g in d_mes['gastos'] if not g['pago'])
     inv = float(d_mes.get('investido', 0.0))
@@ -72,7 +72,6 @@ else:
 
     st.divider()
 
-    # --- GASTOS ---
     col_l, col_g = st.columns([1.6, 1])
     with col_l:
         st.subheader("📝 Gastos")
@@ -86,7 +85,8 @@ else:
                 with st.expander(f"{g.get('cat', '🛠️')} {g['item']} - {fmt(g['valor'])}"):
                     ca1, ca2, ca3, ca4 = st.columns([2, 1.5, 1, 0.5])
                     g["item"] = ca1.text_input("Item", g["item"], key=f"it_{mes}_{i}")
-                    g["valor"] = ca3.number_input("Valor", value=float(g["valor"]), key=f"vl_{mes}_{i}", format="%.2f")
+                    # AJUSTE: Valores de gastos aceitam até 1 milhão
+                    g["valor"] = ca3.number_input("Valor", value=float(g["valor"]), key=f"vl_{mes}_{i}", format="%.2f", step=1.0, min_value=0.0, max_value=1000000.0)
                     g["pago"] = ca4.checkbox("Pago?", value=g["pago"], key=f"ck_{mes}_{i}")
                     if st.button("🗑️", key=f"del_{mes}_{i}"): idx_del = i
             if idx_del is not None:
@@ -96,7 +96,8 @@ else:
 
     with col_g:
         st.subheader("📊 Gráfico")
-        n_inv = st.number_input("Investir agora:", value=float(inv), format="%.2f", key="n_inv")
+        # AJUSTE: Investimento aceita valores altos
+        n_inv = st.number_input("Investir agora:", value=float(inv), format="%.2f", step=1.0, key="n_inv", min_value=0.0, max_value=1000000.0)
         if n_inv != inv:
             d_mes["investido"] = n_inv
             st.rerun()
@@ -105,16 +106,15 @@ else:
         fig = px.pie(df_p[df_p["Valor"] > 0], values='Valor', names='Destino', hole=0.5, color='Destino', color_discrete_map={"Pago": "#2ecc71", "Pendente": "#e74c3c", "Investido": "#f1c40f", "Livre": "#3498db"})
         st.plotly_chart(fig, use_container_width=True)
 
-    # --- SONHOS COM BOTÃO DE SOMAR (DEPÓSITO) ---
+    # --- SONHOS ---
     st.divider()
     st.subheader("🚀 Meus Sonhos (Objetivos)")
-    if 'metas_sonhos' not in st.session_state.db: st.session_state.db['metas_sonhos'] = []
-    
     s1, s2 = st.columns([1, 2])
     with s1:
         with st.form("f_sonho"):
             n_s = st.text_input("Nome do Sonho")
-            v_alvo = st.number_input("Valor Total (Meta)", min_value=0.0, format="%.2f")
+            # AJUSTE: Meta do sonho aceita valores de até 10 milhões (ex: Casa de 100 mil ou terreno de 40 mil)
+            v_alvo = st.number_input("Valor Total (Meta)", min_value=0.0, value=0.0, format="%.2f", step=1.0, max_value=10000000.0)
             if st.form_submit_button("Criar Sonho"):
                 st.session_state.db['metas_sonhos'].append({"nome": n_s, "alvo": v_alvo, "acumulado": 0.0})
                 salvar_banco(st.session_state.db)
@@ -134,13 +134,12 @@ else:
                     c_info.write(f"Falta: **{fmt(max(0, alvo - acum))}**")
                     c_info.progress(prog)
                     
-                    # AQUI ESTÁ A MÁGICA: Campo para somar valor novo
-                    valor_deposito = c_deposito.number_input(f"Somar valor em {s['nome']}:", value=0.0, format="%.2f", key=f"dep_{i}")
-                    if c_deposito.button(f"Confirmar Depósito", key=f"btn_dep_{i}"):
+                    # AJUSTE: Depósito agora aceita somar valores altos (ex: colocar 10.000 de uma vez)
+                    valor_deposito = c_deposito.number_input(f"Somar em {s['nome']}:", value=0.0, format="%.2f", step=1.0, key=f"dep_{i}", max_value=10000000.0)
+                    if c_deposito.button(f"Confirmar", key=f"btn_dep_{i}"):
                         s['acumulado'] += valor_deposito
                         salvar_banco(st.session_state.db)
                         st.rerun()
-                        
                     if c_del.button("🗑️", key=f"ds_{i}"): idx_s_del = i
             
             if idx_s_del is not None:
