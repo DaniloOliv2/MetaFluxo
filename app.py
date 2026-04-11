@@ -13,59 +13,82 @@ try:
 except:
     st.set_page_config(page_title="MetaFlux Pro 📈", layout="wide", page_icon="📈")
 
-# --- ESTILO CSS AVANÇADO ---
+# --- ESTILO CSS AVANÇADO (BASEADO NO SEU MODELO DE CARD) ---
 st.markdown("""
     <style>
-    .stApp { background-color: #0f172a; }
+    /* Fundo Infinito com Degradê */
+    .stApp { 
+        background-color: #020617;
+        background-image: radial-gradient(circle at top right, #1e3a8a, #020617);
+    }
     
-    /* Centralização Real do Logo e Container */
-    .auth-container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        width: 100%;
+    /* O Cartão de Login (Baseado no seu modelo) */
+    .login-card {
+        background-color: #1e293b;
+        padding: 45px;
+        border-radius: 24px;
+        border: 1px solid #334155;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+        text-align: center;
         max-width: 400px;
         margin: auto;
     }
-    
-    /* Forçar Logo no Centro */
-    [data-testid="stImage"] {
-        display: flex;
-        justify-content: center;
-        margin-left: auto;
-        margin-right: auto;
-    }
 
+    /* Ajuste da Barra Lateral */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #1e3a8a 0%, #020617 100%);
     }
     
+    /* Inputs Estilizados - Estilo Moderno */
     div[data-baseweb="input"] {
-        background-color: #020617 !important;
+        background-color: #0f172a !important;
         border: 1px solid #334155 !important;
-        border-radius: 8px !important;
+        border-radius: 12px !important;
+        min-height: 45px !important;
     }
-    input { color: #f1f5f9 !important; font-weight: bold !important; }
+    
+    input { 
+        color: #f1f5f9 !important; 
+        font-size: 1rem !important;
+    }
 
+    /* Botão ACESSAR PAINEL */
     .stButton>button {
         background-color: #2563eb !important;
         color: white !important;
-        border-radius: 8px !important;
-        font-weight: 600 !important;
+        border-radius: 12px !important;
+        font-weight: 700 !important;
+        height: 50px !important;
+        width: 100% !important;
         border: none !important;
-        width: 100%;
+        margin-top: 15px;
+        transition: 0.4s;
+    }
+    .stButton>button:hover {
+        background-color: #3b82f6 !important;
+        box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
     }
 
-    .link-button button {
+    /* Rodapé do Card (Links) */
+    .link-footer {
+        margin-top: 25px;
+        font-size: 0.85rem;
+    }
+    .link-footer button {
         background: none !important;
         border: none !important;
         color: #94a3b8 !important;
-        text-decoration: underline !important;
-        font-size: 0.85rem !important;
-        width: auto !important;
-        margin: 0 auto;
-        display: block;
+        text-decoration: none !important;
+    }
+    .link-footer button:hover {
+        color: #f1f5f9 !important;
+    }
+
+    /* Centralização de Imagem */
+    [data-testid="stImage"] {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 25px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -94,99 +117,100 @@ if 'db' not in st.session_state:
 # --- ESTADOS DE SESSÃO ---
 if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
 if 'auth_mode' not in st.session_state: st.session_state['auth_mode'] = 'login'
-if 'login_error' not in st.session_state: st.session_state['login_error'] = False
+if 'error_msg' not in st.session_state: st.session_state['error_msg'] = False
 
 # --- TELA DE AUTENTICAÇÃO ---
 if not st.session_state['logged_in']:
-    # Criamos colunas para garantir a centralização no meio da tela
-    _, center_col, _ = st.columns([1, 2, 1])
+    _, center_col, _ = st.columns([1, 1.8, 1])
     
     with center_col:
-        # Espaçamento para o topo
-        st.write("")
+        st.write("") # Espaçadores verticais
         st.write("")
         
-        # MODO LOGIN
+        # --- MODO LOGIN ---
         if st.session_state['auth_mode'] == 'login':
+            st.markdown('<div class="login-card">', unsafe_allow_html=True)
             try:
-                # Logo centralizado
-                st.image("logo.png", width=250)
+                st.image("logo.png", width=200)
             except:
                 st.title("📈 MetaFlux")
             
-            u = st.text_input("Usuário", placeholder="Usuário", key="login_user")
-            p = st.text_input("Senha", type="password", placeholder="Senha", key="login_pass")
+            u = st.text_input("Usuário", placeholder="Seu usuário", key="u_login")
+            p = st.text_input("Senha", type="password", placeholder="Sua senha", key="p_login")
             
-            if st.button("Acessar Painel"):
+            if st.button("ACESSAR PAINEL"):
                 if u in st.session_state.db["users"] and st.session_state.db["users"][u]["password"] == p:
                     st.session_state['logged_in'] = True
                     st.session_state['current_user'] = u
-                    st.session_state['login_error'] = False
                     st.rerun()
                 else:
-                    st.session_state['login_error'] = True
-            
-            # MENSAGEM DE ERRO QUE SOME SOZINHA
-            if st.session_state['login_error']:
-                msg_erro = st.error("Usuário ou senha incorretos.")
-                # Link de recuperação só aparece aqui
-                st.markdown('<div class="link-button">', unsafe_allow_html=True)
-                if st.button("Esqueci minha senha"): 
-                    st.session_state['auth_mode'] = 'recover'
+                    st.session_state['error_msg'] = True
                     st.rerun()
-                st.markdown('</div>', unsafe_allow_html=True)
-                
-                # Pausa de 3 segundos e limpa o erro (forçando rerun)
-                time.sleep(3)
-                st.session_state['login_error'] = False
-                st.rerun()
             
-            st.markdown('<div class="link-button" style="margin-top:20px;">', unsafe_allow_html=True)
-            if st.button("Não tem conta? Crie uma aqui"): 
+            # Inteligência de Erro (Some após 5s)
+            if st.session_state['error_msg']:
+                st.error("Dados incorretos!")
+                if st.button("Esqueci minha senha"):
+                    st.session_state['auth_mode'] = 'recover'
+                    st.session_state['error_msg'] = False
+                    st.rerun()
+                time.sleep(5)
+                st.session_state['error_msg'] = False
+                st.rerun()
+
+            st.markdown('<div class="link-footer">', unsafe_allow_html=True)
+            if st.button("Não tem conta? Cadastre-se aqui"):
                 st.session_state['auth_mode'] = 'signup'
                 st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
 
-        # MODO CADASTRO
+        # --- MODO CADASTRO ---
         elif st.session_state['auth_mode'] == 'signup':
-            st.subheader("Criar conta")
-            new_u = st.text_input("Novo Usuário")
-            new_p = st.text_input("Nova Senha", type="password")
+            st.markdown('<div class="login-card">', unsafe_allow_html=True)
+            st.subheader("Nova Conta")
+            new_u = st.text_input("Escolha um Usuário")
+            new_p = st.text_input("Escolha uma Senha", type="password")
             new_s = st.text_input("Pergunta: Nome do filho?")
-            if st.button("Cadastrar"):
+            if st.button("FINALIZAR CADASTRO"):
                 if new_u and new_p and new_s:
                     st.session_state.db["users"][new_u] = {"password": new_p, "security_answer": new_s}
                     salvar_banco(st.session_state.db)
-                    st.success("Cadastro realizado!")
+                    st.success("Conta criada com sucesso!")
                     time.sleep(2)
                     st.session_state['auth_mode'] = 'login'
                     st.rerun()
-            if st.button("Voltar", key="back_login"): 
+            if st.button("Voltar ao Login"):
                 st.session_state['auth_mode'] = 'login'
                 st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
 
-        # MODO RECUPERAÇÃO
+        # --- MODO RECUPERAÇÃO ---
         elif st.session_state['auth_mode'] == 'recover':
+            st.markdown('<div class="login-card">', unsafe_allow_html=True)
             st.subheader("Recuperação")
-            rec_u = st.text_input("Usuário cadastrado")
+            rec_u = st.text_input("Seu usuário")
             if rec_u in st.session_state.db["users"]:
                 ans = st.text_input("Nome do filho?")
-                if st.button("Verificar"):
+                if st.button("REVELAR SENHA"):
                     if ans.lower() == st.session_state.db["users"][rec_u]["security_answer"].lower():
                         st.info(f"Sua senha é: {st.session_state.db['users'][rec_u]['password']}")
-            if st.button("Voltar"): 
+            if st.button("Voltar ao Login"):
                 st.session_state['auth_mode'] = 'login'
                 st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
 
 else:
-    # --- APP PRINCIPAL (LOGADO) ---
+    # --- INTERFACE LOGADA ---
     with st.sidebar:
-        try: st.image("logo.png", use_column_width=True)
-        except: st.title("📈 METAFLUX")
+        try:
+            st.image("logo.png", use_column_width=True)
+        except:
+            st.title("📈 METAFLUX")
         st.divider()
         privacidade = st.toggle("👁️ Modo Privacidade")
         st.divider()
-        mes = st.selectbox("Mês", ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"], index=3)
+        mes = st.selectbox("Mês de Referência", ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"], index=3)
         
         if privacidade:
             st.text_input("🔐 RENDA (OCULTA)", value="******", disabled=True)
@@ -219,7 +243,7 @@ else:
     c1.metric("✅ PAGOS", fmt(t_pago))
     c2.metric("⏳ PENDENTES", fmt(t_pend))
     c3.metric("🚀 MEUS SONHOS", fmt(total_sonhos)) 
-    c4.metric("💰 LIVRE", fmt(saldo))
+    c4.metric("💰 SALDO LIVRE", fmt(saldo))
 
     st.write("")
     prog_meta = min(inv_mes / meta_inv, 1.0) if meta_inv > 0 else 0.0
@@ -238,7 +262,7 @@ else:
             salvar_banco(st.session_state.db)
             st.rerun()
 
-        if st.button("➕ Novo Gasto"):
+        if st.button("➕ Adicionar Novo Gasto"):
             st.session_state.db[mes]["gastos"].append({"item": "Novo", "valor": 0.0, "pago": False})
             st.rerun()
         
@@ -260,7 +284,7 @@ else:
                 st.rerun()
 
     with col_g:
-        st.subheader("📊 Gráfico")
+        st.subheader("📊 Raio-X Financeiro")
         labels = ["Pago", "Pendente", "Investido", "Sonhos", "Saldo Livre"]
         valores = [t_pago, t_pend, inv_mes, total_sonhos, max(0, saldo)]
         df_p = pd.DataFrame({"Legenda": labels, "Valor": valores})
