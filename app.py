@@ -5,9 +5,8 @@ import plotly.express as px
 import pandas as pd
 from PIL import Image
 
-# --- CONFIGURAÇÃO VISUAL (Favicon e Título) ---
+# --- CONFIGURAÇÃO VISUAL ---
 try:
-    # Usando o arquivo que você subiu
     img_favicon = Image.open("favicon.jpg")
     st.set_page_config(page_title="MetaFlux Pro 📈", layout="wide", page_icon=img_favicon)
 except:
@@ -41,8 +40,11 @@ st.markdown("""
         box-shadow: 0 0 15px rgba(59, 130, 246, 0.2);
         border-left: 5px solid #60a5fa;
     }
-    div[data-testid="stMetricLabel"] { color: #94a3b8 !important; font-weight: bold !important; text-transform: uppercase; }
-    div[data-testid="stMetricValue"] { color: #ffffff !important; font-size: 28px !important; }
+    
+    /* Barra de progresso customizada */
+    .stProgress > div > div > div > div {
+        background-image: linear-gradient(to right, #3b82f6 , #2ecc71);
+    }
 
     div[data-testid="stExpander"] {
         background-color: #1e293b !important;
@@ -56,7 +58,6 @@ st.markdown("""
         border-radius: 10px !important;
         font-weight: bold !important;
         width: 100%;
-        border: none !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -92,9 +93,8 @@ if not st.session_state['logged_in']:
             st.rerun()
         else: st.error("Acesso negado.")
 else:
-    # --- BARRA LATERAL (SIDEBAR) ---
+    # --- BARRA LATERAL ---
     with st.sidebar:
-        # Carrega o seu logo principal
         try:
             img_logo = Image.open("logo.png")
             st.image(img_logo, use_column_width=True)
@@ -128,29 +128,44 @@ else:
 
     t_pago = sum(float(g['valor']) for g in d_mes['gastos'] if g['pago'])
     t_pend = sum(float(g['valor']) for g in d_mes['gastos'] if not g['pago'])
+    
+    # Pegamos o valor investido do banco de dados
     inv_mes = float(d_mes.get('investido', 0.0))
     total_sonhos = sum(float(s['acumulado']) for s in st.session_state.db.get('metas_sonhos', []))
     saldo = renda - t_pago - t_pend - inv_mes
 
     st.title(f"🚀 Dashboard de {mes}")
     
-    # Cards métricos
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("✅ PAGOS", fmt(t_pago))
     c2.metric("⏳ PENDENTES", fmt(t_pend))
     c3.metric("🚀 MEUS SONHOS", fmt(total_sonhos)) 
     c4.metric("💰 SALDO LIVRE", fmt(saldo))
 
+    # --- NOVA BARRA DE PROGRESSO DA META (O QUE TINHA SUMIDO) ---
+    st.write("")
+    progresso_meta = min(inv_mes / meta_inv, 1.0) if meta_inv > 0 else 0.0
+    col_p1, col_p2 = st.columns([3, 1])
+    col_p1.markdown(f"**Progresso da Meta de Investimento ({progresso_meta*100:.1f}%)**")
+    col_p2.markdown(f"<div style='text-align:right'>Faltam: {fmt(max(0, meta_inv - inv_mes))}</div>", unsafe_allow_html=True)
+    st.progress(progresso_meta)
     st.divider()
 
     col_l, col_g = st.columns([1.4, 1])
     with col_l:
-        st.subheader("📝 Gestão de Gastos")
-        if st.button("➕ Novo Gasto"):
+        st.subheader("📝 Lançamentos")
+        # Campo para atualizar quanto investiu no mês
+        new_inv = st.number_input("Quanto investiu este mês? (R$)", value=inv_mes, step=100.0, format="%.2f", key="inv_input")
+        if new_inv != inv_mes:
+            st.session_state.db[mes]['investido'] = new_inv
+            salvar_banco(st.session_state.db)
+            st.rerun()
+
+        if st.button("➕ Adicionar Novo Gasto"):
             st.session_state.db[mes]["gastos"].append({"item": "Novo", "valor": 0.0, "pago": False})
             st.rerun()
         
-        with st.container(height=450):
+        with st.container(height=350):
             idx_del = None
             for i, g in enumerate(d_mes["gastos"]):
                 with st.expander(f"📦 {g['item']} - {fmt(g['valor'])}", expanded=True):
@@ -184,7 +199,6 @@ else:
                               paper_bgcolor='rgba(0,0,0,0)', font_color="white")
             st.plotly_chart(fig, use_container_width=True)
             
-    # --- SEÇÃO DE SONHOS ---
     st.divider()
     st.subheader("🚀 Meus Sonhos") 
     s1, s2 = st.columns([1, 2])
