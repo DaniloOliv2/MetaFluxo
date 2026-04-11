@@ -7,30 +7,55 @@ import pandas as pd
 # --- CONFIGURAÇÃO VISUAL ---
 st.set_page_config(page_title="MetaFluxo Premium 📈", layout="wide", page_icon="📈")
 
-# --- ESTILO CSS PERSONALIZADO (A MÁGICA DO VISUAL) ---
+# --- ESTILO CSS PROFISSIONAL (CORREÇÃO DOS CAMPOS BRANCOS) ---
 st.markdown("""
     <style>
-    /* Estilizando a barra lateral */
+    /* Fundo da página */
+    .stApp { background-color: #f1f5f9; }
+    
+    /* Barra lateral Gradiente */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #1e3a8a 0%, #0f172a 100%);
-        color: white;
     }
-    [data-testid="stSidebar"] * {
-        color: white !important;
+    [data-testid="stSidebar"] * { color: white !important; }
+    
+    /* CORREÇÃO DEFINITIVA: Estilizando os campos de entrada (Inputs) */
+    div[data-baseweb="input"] {
+        background-color: #e2e8f0 !important; /* Cinza claro para dar contraste */
+        border: 2px solid #cbd5e1 !important;
+        border-radius: 10px !important;
     }
-    /* Estilizando os blocos (cards) */
-    div[data-testid="stExpander"] {
-        background-color: #f8fafc;
-        border-radius: 15px;
-        border: 1px solid #e2e8f0;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    input {
+        color: #0f172a !important; /* Texto azul quase preto, bem visível */
+        font-weight: bold !important;
     }
-    .stMetric {
+    
+    /* Estilizando os Cards superiores */
+    div[data-testid="stMetric"] {
         background-color: #ffffff;
-        padding: 15px;
-        border-radius: 12px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        border-left: 5px solid #3b82f6;
+        padding: 20px;
+        border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        border-bottom: 5px solid #3b82f6;
+    }
+    div[data-testid="stMetricLabel"] { color: #475569 !important; font-weight: bold !important; }
+    div[data-testid="stMetricValue"] { color: #1e293b !important; }
+
+    /* Estilizando os Blocos de Gastos (Expanders) */
+    div[data-testid="stExpander"] {
+        background-color: #ffffff !important;
+        border-radius: 12px !important;
+        border: 1px solid #cbd5e1 !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
+    }
+    
+    /* Botões */
+    .stButton>button {
+        border-radius: 10px !important;
+        font-weight: bold !important;
+        background-color: #3b82f6 !important;
+        color: white !important;
+        border: none !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -57,13 +82,14 @@ if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
 
 if not st.session_state['logged_in']:
     st.title("📈 MetaFluxo")
-    u = st.text_input("Usuário")
-    p = st.text_input("Senha", type="password")
-    if st.button("Entrar"):
+    u = st.text_input("Usuário", placeholder="Digite seu usuário")
+    p = st.text_input("Senha", type="password", placeholder="Digite sua senha")
+    if st.button("Acessar Sistema"):
         if u in st.session_state.db["users"] and st.session_state.db["users"][u]["password"] == p:
             st.session_state['logged_in'] = True
             st.session_state['current_user'] = u
             st.rerun()
+        else: st.error("Acesso negado.")
 else:
     # --- INTERFACE ---
     with st.sidebar:
@@ -72,12 +98,11 @@ else:
         st.divider()
         mes = st.selectbox("Mês", ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"], index=3)
         
-        # CORREÇÃO PRIVACIDADE: Ocultando os inputs da barra lateral
-        label_renda = "Sua Renda (R$)" if not privacidade else "Sua Renda (OCULTO)"
-        renda = st.number_input(label_renda, value=3000.0, format="%.2f", step=1.0)
+        lbl_renda = "Sua Renda (R$)" if not privacidade else "Renda (OCULTO)"
+        renda = st.number_input(lbl_renda, value=3000.0, format="%.2f", step=1.0)
         
-        label_meta = "Meta Investimento" if not privacidade else "Meta (OCULTO)"
-        meta_inv = st.number_input(label_meta, value=1000.0, format="%.2f", step=1.0)
+        lbl_meta = "Meta Investimento" if not privacidade else "Meta (OCULTO)"
+        meta_inv = st.number_input(lbl_meta, value=1000.0, format="%.2f", step=1.0)
         
         st.divider()
         if st.button("🚪 Sair"):
@@ -97,40 +122,40 @@ else:
     total_sonhos = sum(float(s['acumulado']) for s in st.session_state.db.get('metas_sonhos', []))
     saldo = renda - t_pago - t_pend - inv_mes
 
-    st.title(f"📈 Dashboard {mes}")
+    st.title(f"📊 Dashboard de {mes}")
     
-    # Cards com novo estilo CSS
+    # Cards métricos
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("✅ Pagos", fmt(t_pago))
-    c2.metric("⏳ Pendentes", fmt(t_pend))
-    c3.metric("🚀 Nos Sonhos", fmt(total_sonhos))
-    c4.metric("💰 Saldo Livre", fmt(saldo))
+    c1.metric("✅ PAGOS", fmt(t_pago))
+    c2.metric("⏳ PENDENTES", fmt(t_pend))
+    c3.metric("🚀 NOS SONHOS", fmt(total_sonhos))
+    c4.metric("💰 SALDO LIVRE", fmt(saldo))
 
     st.divider()
 
     col_l, col_g = st.columns([1.5, 1])
     with col_l:
-        st.subheader("📝 Seus Blocos")
-        if st.button("➕ Adicionar Gasto"):
+        st.subheader("📝 Seus Gastos")
+        if st.button("➕ Adicionar Novo Bloco"):
             st.session_state.db[mes]["gastos"].append({"item": "Novo", "valor": 0.0, "pago": False, "cat": "🛠️ Outros"})
             st.rerun()
         
         with st.container(height=450):
             idx_del = None
             for i, g in enumerate(d_mes["gastos"]):
-                with st.expander(f"📦 {g['item']} - {fmt(g['valor'])}"):
+                with st.expander(f"📦 {g['item']} - {fmt(g['valor'])}", expanded=True):
                     ca1, ca2, ca3 = st.columns([2, 1, 1])
                     g["item"] = ca1.text_input("Item", g["item"], key=f"it_{mes}_{i}")
                     g["valor"] = ca2.number_input("Valor", value=float(g["valor"]), key=f"vl_{mes}_{i}", format="%.2f")
                     g["pago"] = ca3.checkbox("Pago?", value=g["pago"], key=f"ck_{mes}_{i}")
-                    if st.button("🗑️", key=f"del_{mes}_{i}"): idx_del = i
+                    if st.button("🗑️ Apagar", key=f"del_{mes}_{i}"): idx_del = i
             if idx_del is not None:
                 d_mes["gastos"].pop(idx_del)
                 salvar_banco(st.session_state.db)
                 st.rerun()
 
     with col_g:
-        st.subheader("📊 Análise Geral")
+        st.subheader("📊 Raio-X Financeiro")
         labels = ["Pago", "Pendente", "Investido (Mês)", "Guardado Sonhos", "Saldo Livre"]
         valores = [t_pago, t_pend, inv_mes, total_sonhos, max(0, saldo)]
         
@@ -150,9 +175,9 @@ else:
     s1, s2 = st.columns([1, 2])
     with s1:
         with st.form("f_sonho"):
-            n_s = st.text_input("Novo Objetivo")
-            v_alvo = st.number_input("Valor Meta", min_value=0.0, format="%.2f")
-            if st.form_submit_button("Criar"):
+            n_s = st.text_input("Qual o Sonho?")
+            v_alvo = st.number_input("Valor da Meta", min_value=0.0, format="%.2f")
+            if st.form_submit_button("Criar Objetivo"):
                 st.session_state.db['metas_sonhos'].append({"nome": n_s, "alvo": v_alvo, "acumulado": 0.0})
                 salvar_banco(st.session_state.db)
                 st.rerun()
