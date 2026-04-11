@@ -4,6 +4,7 @@ import os
 import plotly.express as px
 import pandas as pd
 from PIL import Image
+import time
 
 # --- CONFIGURAÇÃO VISUAL ---
 try:
@@ -12,24 +13,34 @@ try:
 except:
     st.set_page_config(page_title="MetaFlux Pro 📈", layout="wide", page_icon="📈")
 
-# --- ESTILO CSS AVANÇADO (MERCADO) ---
+# --- ESTILO CSS AVANÇADO ---
 st.markdown("""
     <style>
     .stApp { background-color: #0f172a; }
     
-    /* Centralização Responsiva */
+    /* Centralização Real do Logo e Container */
     .auth-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
         max-width: 400px;
         margin: auto;
-        padding: 40px 20px;
-        text-align: center;
+    }
+    
+    /* Forçar Logo no Centro */
+    [data-testid="stImage"] {
+        display: flex;
+        justify-content: center;
+        margin-left: auto;
+        margin-right: auto;
     }
 
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #1e3a8a 0%, #020617 100%);
     }
     
-    /* Inputs Modernos */
     div[data-baseweb="input"] {
         background-color: #020617 !important;
         border: 1px solid #334155 !important;
@@ -37,29 +48,25 @@ st.markdown("""
     }
     input { color: #f1f5f9 !important; font-weight: bold !important; }
 
-    /* Botão Principal Estilo SaaS */
     .stButton>button {
         background-color: #2563eb !important;
         color: white !important;
         border-radius: 8px !important;
-        padding: 10px 20px !important;
         font-weight: 600 !important;
         border: none !important;
-        transition: 0.3s;
+        width: 100%;
     }
-    .stButton>button:hover { background-color: #3b82f6 !important; box-shadow: 0 0 15px rgba(59,130,246,0.4); }
 
-    /* Escondendo os botões de link padrão para parecerem links reais */
     .link-button button {
         background: none !important;
         border: none !important;
         color: #94a3b8 !important;
         text-decoration: underline !important;
         font-size: 0.85rem !important;
-        font-weight: normal !important;
         width: auto !important;
+        margin: 0 auto;
+        display: block;
     }
-    .link-button button:hover { color: #f1f5f9 !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -91,21 +98,24 @@ if 'login_error' not in st.session_state: st.session_state['login_error'] = Fals
 
 # --- TELA DE AUTENTICAÇÃO ---
 if not st.session_state['logged_in']:
-    # Container centralizado responsivo
+    # Criamos colunas para garantir a centralização no meio da tela
     _, center_col, _ = st.columns([1, 2, 1])
     
     with center_col:
-        st.markdown('<div class="auth-container">', unsafe_allow_html=True)
-        try:
-            # Aumentado o tamanho do logo para 250px
-            st.image("logo.png", width=250)
-        except:
-            st.title("📈 MetaFlux")
+        # Espaçamento para o topo
+        st.write("")
+        st.write("")
         
         # MODO LOGIN
         if st.session_state['auth_mode'] == 'login':
-            u = st.text_input("Usuário", placeholder="Digite seu usuário")
-            p = st.text_input("Senha", type="password", placeholder="Digite sua senha")
+            try:
+                # Logo centralizado
+                st.image("logo.png", width=250)
+            except:
+                st.title("📈 MetaFlux")
+            
+            u = st.text_input("Usuário", placeholder="Usuário", key="login_user")
+            p = st.text_input("Senha", type="password", placeholder="Senha", key="login_pass")
             
             if st.button("Acessar Painel"):
                 if u in st.session_state.db["users"] and st.session_state.db["users"][u]["password"] == p:
@@ -116,14 +126,25 @@ if not st.session_state['logged_in']:
                 else:
                     st.session_state['login_error'] = True
             
+            # MENSAGEM DE ERRO QUE SOME SOZINHA
             if st.session_state['login_error']:
-                st.error("Usuário ou senha incorretos.")
+                msg_erro = st.error("Usuário ou senha incorretos.")
+                # Link de recuperação só aparece aqui
                 st.markdown('<div class="link-button">', unsafe_allow_html=True)
-                if st.button("Esqueci minha senha"): st.session_state['auth_mode'] = 'recover'; st.rerun()
+                if st.button("Esqueci minha senha"): 
+                    st.session_state['auth_mode'] = 'recover'
+                    st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
+                
+                # Pausa de 3 segundos e limpa o erro (forçando rerun)
+                time.sleep(3)
+                st.session_state['login_error'] = False
+                st.rerun()
             
             st.markdown('<div class="link-button" style="margin-top:20px;">', unsafe_allow_html=True)
-            if st.button("Não tem conta? Crie uma aqui"): st.session_state['auth_mode'] = 'signup'; st.rerun()
+            if st.button("Não tem conta? Crie uma aqui"): 
+                st.session_state['auth_mode'] = 'signup'
+                st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
         # MODO CADASTRO
@@ -131,34 +152,31 @@ if not st.session_state['logged_in']:
             st.subheader("Criar conta")
             new_u = st.text_input("Novo Usuário")
             new_p = st.text_input("Nova Senha", type="password")
-            new_s = st.text_input("Qual o nome do seu filho?")
-            
+            new_s = st.text_input("Pergunta: Nome do filho?")
             if st.button("Cadastrar"):
                 if new_u and new_p and new_s:
                     st.session_state.db["users"][new_u] = {"password": new_p, "security_answer": new_s}
                     salvar_banco(st.session_state.db)
                     st.success("Cadastro realizado!")
-                    st.session_state['auth_mode'] = 'login'; st.rerun()
-            
-            st.markdown('<div class="link-button">', unsafe_allow_html=True)
-            if st.button("Voltar ao login"): st.session_state['auth_mode'] = 'login'; st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
+                    time.sleep(2)
+                    st.session_state['auth_mode'] = 'login'
+                    st.rerun()
+            if st.button("Voltar", key="back_login"): 
+                st.session_state['auth_mode'] = 'login'
+                st.rerun()
 
         # MODO RECUPERAÇÃO
         elif st.session_state['auth_mode'] == 'recover':
             st.subheader("Recuperação")
             rec_u = st.text_input("Usuário cadastrado")
             if rec_u in st.session_state.db["users"]:
-                ans = st.text_input("Pergunta: Nome do filho?")
+                ans = st.text_input("Nome do filho?")
                 if st.button("Verificar"):
                     if ans.lower() == st.session_state.db["users"][rec_u]["security_answer"].lower():
                         st.info(f"Sua senha é: {st.session_state.db['users'][rec_u]['password']}")
-            
-            st.markdown('<div class="link-button">', unsafe_allow_html=True)
-            if st.button("Voltar ao login"): st.session_state['auth_mode'] = 'login'; st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
+            if st.button("Voltar"): 
+                st.session_state['auth_mode'] = 'login'
+                st.rerun()
 
 else:
     # --- APP PRINCIPAL (LOGADO) ---
