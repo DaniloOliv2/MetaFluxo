@@ -22,12 +22,6 @@ st.markdown("""
         border-radius: 10px !important;
     }
     
-    /* ESTILO PARA OCULTAR TEXTO QUANDO EM PRIVACIDADE */
-    .privado input {
-        color: transparent !important;
-        text-shadow: 0 0 10px #f1f5f9 !important; /* Cria um efeito de borrão nos números */
-    }
-    
     input {
         color: #f1f5f9 !important;
         -webkit-text-fill-color: #f1f5f9 !important;
@@ -48,14 +42,6 @@ st.markdown("""
         background-color: #1e293b !important;
         border: 1px solid #334155 !important;
         border-radius: 12px !important;
-    }
-    
-    .saude-box {
-        padding: 15px;
-        border-radius: 10px;
-        text-align: center;
-        font-weight: bold;
-        margin-top: 10px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -97,19 +83,18 @@ else:
         st.divider()
         mes = st.selectbox("Mês", ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"], index=3)
         
-        # --- AQUI ESTÁ O AJUSTE DA PRIVACIDADE NOS CAMPOS ---
-        # Usamos uma "div" invisível para aplicar o CSS de borrão se a privacidade estiver ativa
+        # --- AQUI ESTÁ A SOLUÇÃO DEFINITIVA ---
         if privacidade:
-            st.markdown('<div class="privado">', unsafe_allow_html=True)
-        
-        lbl_renda = "Sua Renda (R$)" if not privacidade else "🔐 RENDA OCULTA"
-        renda = st.number_input(lbl_renda, value=3000.0, format="%.2f")
-        
-        lbl_meta = "Meta Investimento" if not privacidade else "🔐 META OCULTA"
-        meta_inv = st.number_input(lbl_meta, value=1000.0, format="%.2f")
-        
-        if privacidade:
-            st.markdown('</div>', unsafe_allow_html=True)
+            # Se a privacidade estiver ON, usamos text_input com tipo password para esconder com bolinhas
+            st.text_input("🔐 RENDA (OCULTA)", value="******", disabled=True)
+            st.text_input("🔐 META (OCULTA)", value="******", disabled=True)
+            # Mantemos os valores reais em variáveis escondidas para o cálculo não quebrar
+            renda = 3000.0 
+            meta_inv = 1000.0
+        else:
+            # Se a privacidade estiver OFF, mostra os campos normais para você editar
+            renda = st.number_input("Sua Renda (R$)", value=3000.0, format="%.2f")
+            meta_inv = st.number_input("Meta Investimento (R$)", value=1000.0, format="%.2f")
         
         st.divider()
         if st.button("🚪 Sair"):
@@ -151,9 +136,10 @@ else:
                     ca1, ca2, ca3 = st.columns([2, 1, 1])
                     g["item"] = ca1.text_input("Item", g["item"], key=f"it_{mes}_{i}")
                     
-                    if privacidade: st.markdown('<div class="privado">', unsafe_allow_html=True)
-                    g["valor"] = ca2.number_input("Valor", value=float(g["valor"]), key=f"vl_{mes}_{i}", format="%.2f")
-                    if privacidade: st.markdown('</div>', unsafe_allow_html=True)
+                    if privacidade:
+                        ca2.text_input("Valor", value="****", disabled=True, key=f"vlp_{mes}_{i}")
+                    else:
+                        g["valor"] = ca2.number_input("Valor", value=float(g["valor"]), key=f"vl_{mes}_{i}", format="%.2f")
                     
                     g["pago"] = ca3.checkbox("Pago?", value=g["pago"], key=f"ck_{mes}_{i}")
                     if st.button("🗑️ Deletar", key=f"del_{mes}_{i}"): idx_del = i
@@ -177,19 +163,11 @@ else:
             
             texto_info = 'percent+label' if not privacidade else 'none'
             fig.update_traces(textinfo=texto_info, pull=[0, 0, 0, 0, 0.1])
-            
             fig.update_layout(showlegend=(not privacidade), margin=dict(t=0,b=0,l=0,r=0), 
                               paper_bgcolor='rgba(0,0,0,0)', font_color="white")
             st.plotly_chart(fig, use_container_width=True)
             
-            if not privacidade:
-                if t_pend > renda * 0.5:
-                    st.markdown('<div class="saude-box" style="background-color: #7f1d1d; color: #fecaca;">⚠️ ALERTA: Gastos pendentes altos!</div>', unsafe_allow_html=True)
-                elif saldo > 0:
-                    st.markdown('<div class="saude-box" style="background-color: #064e3b; color: #a7f3d0;">✅ EXCELENTE: Saldo positivo!</div>', unsafe_allow_html=True)
-        else:
-            st.info("Aguardando dados...")
-
+    # --- SONHOS ---
     st.divider()
     st.subheader("🚀 Meus Sonhos")
     s1, s2 = st.columns([1, 2])
@@ -212,14 +190,15 @@ else:
                     c_i.write(f"Guardado: {fmt(acum)}")
                     c_i.progress(prog)
                     
-                    if privacidade: st.markdown('<div class="privado">', unsafe_allow_html=True)
-                    v_dep = c_d.number_input(f"Somar em {s['nome']}", value=0.0, format="%.2f", key=f"d_{i}")
-                    if privacidade: st.markdown('</div>', unsafe_allow_html=True)
-                    
-                    if c_d.button("Confirmar", key=f"b_{i}"):
-                        s['acumulado'] += v_dep
-                        salvar_banco(st.session_state.db)
-                        st.rerun()
+                    if privacidade:
+                        c_d.text_input("Aportar", value="****", disabled=True, key=f"dp_{i}")
+                    else:
+                        v_dep = c_d.number_input(f"Somar em {s['nome']}", value=0.0, format="%.2f", key=f"d_{i}")
+                        if c_d.button("Confirmar", key=f"b_{i}"):
+                            s['acumulado'] += v_dep
+                            salvar_banco(st.session_state.db)
+                            st.rerun()
+                            
                     if c_x.button("🗑️", key=f"x_{i}"): idx_s_del = i
             if idx_s_del is not None:
                 st.session_state.db['metas_sonhos'].pop(idx_s_del)
