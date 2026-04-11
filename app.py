@@ -7,7 +7,7 @@ import pandas as pd
 # --- CONFIGURAÇÃO VISUAL ---
 st.set_page_config(page_title="MetaFluxo Dark Pro 📈", layout="wide", page_icon="📈")
 
-# --- ESTILO CSS DARK 2.0 (VISIBILIDADE E IMPACTO) ---
+# --- ESTILO CSS DARK 2.0 ---
 st.markdown("""
     <style>
     .stApp { background-color: #0f172a; }
@@ -16,7 +16,6 @@ st.markdown("""
     }
     [data-testid="stSidebar"] * { color: #f1f5f9 !important; }
 
-    /* FORÇANDO PRIVACIDADE NOS INPUTS DA SIDEBAR */
     div[data-baseweb="input"] {
         background-color: #020617 !important;
         border: 2px solid #334155 !important;
@@ -28,7 +27,6 @@ st.markdown("""
         font-weight: bold !important;
     }
 
-    /* Cards de métricas com efeito Glow */
     div[data-testid="stMetric"] {
         background-color: #1e293b;
         padding: 20px;
@@ -39,14 +37,12 @@ st.markdown("""
     div[data-testid="stMetricLabel"] { color: #94a3b8 !important; font-weight: bold !important; text-transform: uppercase; }
     div[data-testid="stMetricValue"] { color: #ffffff !important; font-size: 28px !important; }
 
-    /* Expanders Estilizados */
     div[data-testid="stExpander"] {
         background-color: #1e293b !important;
         border: 1px solid #334155 !important;
         border-radius: 12px !important;
     }
     
-    /* Mensagem de Saúde Financeira */
     .saude-box {
         padding: 15px;
         border-radius: 10px;
@@ -94,14 +90,12 @@ else:
         st.divider()
         mes = st.selectbox("Mês", ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"], index=3)
         
-        # AJUSTE FINO PRIVACIDADE: Se ativo, o valor some do campo
-        val_renda = 3000.0 if not privacidade else 0.0
-        lbl_renda = "Sua Renda (R$)" if not privacidade else "🔐 CONTEÚDO OCULTO"
-        renda = st.number_input(lbl_renda, value=float(val_renda), format="%.2f", disabled=privacidade)
+        # AJUSTE: O valor agora é mantido mesmo oculto para não quebrar o gráfico
+        lbl_renda = "Sua Renda (R$)" if not privacidade else "🔐 RENDA OCULTA"
+        renda = st.number_input(lbl_renda, value=3000.0, format="%.2f")
         
-        val_meta = 1000.0 if not privacidade else 0.0
-        lbl_meta = "Meta Investimento" if not privacidade else "🔐 CONTEÚDO OCULTO"
-        meta_inv = st.number_input(lbl_meta, value=float(val_meta), format="%.2f", disabled=privacidade)
+        lbl_meta = "Meta Investimento" if not privacidade else "🔐 META OCULTA"
+        meta_inv = st.number_input(lbl_meta, value=1000.0, format="%.2f")
         
         st.divider()
         if st.button("🚪 Sair"):
@@ -159,27 +153,27 @@ else:
         df_p = df_p[df_p["Valor"] > 0]
 
         if not df_p.empty:
-            # GRÁFICO MAIS PROFISSIONAL
             fig = px.pie(df_p, values='Valor', names='Legenda', hole=0.5,
                          color='Legenda',
                          color_discrete_map={"Pago": "#10b981", "Pendente": "#ef4444", "Investido": "#f59e0b", "Sonhos": "#8b5cf6", "Saldo Livre": "#3b82f6"})
             
-            fig.update_traces(textinfo='percent+label', pull=[0, 0, 0, 0, 0.1]) # Destaca o Saldo Livre
-            fig.update_layout(showlegend=False, margin=dict(t=0,b=0,l=0,r=0), 
+            # AJUSTE: Esconde legendas do gráfico se a privacidade estiver ligada
+            texto_info = 'percent+label' if not privacidade else 'none'
+            fig.update_traces(textinfo=texto_info, pull=[0, 0, 0, 0, 0.1])
+            
+            fig.update_layout(showlegend=(not privacidade), margin=dict(t=0,b=0,l=0,r=0), 
                               paper_bgcolor='rgba(0,0,0,0)', font_color="white")
             st.plotly_chart(fig, use_container_width=True)
             
-            # DIFERENCIAL: Análise de Saúde Financeira
-            if t_pend > renda * 0.5:
-                st.markdown('<div class="saude-box" style="background-color: #7f1d1d; color: #fecaca;">⚠️ ALERTA: Gastos pendentes acima de 50%!</div>', unsafe_allow_html=True)
-            elif saldo > 0:
-                st.markdown('<div class="saude-box" style="background-color: #064e3b; color: #a7f3d0;">✅ EXCELENTE: Você está com saldo positivo!</div>', unsafe_allow_html=True)
-            else:
-                st.markdown('<div class="saude-box" style="background-color: #451a03; color: #fef3c7;">ℹ️ ATENÇÃO: Seu orçamento está no limite.</div>', unsafe_allow_html=True)
+            # Feedback de Saúde Financeira
+            if not privacidade:
+                if t_pend > renda * 0.5:
+                    st.markdown('<div class="saude-box" style="background-color: #7f1d1d; color: #fecaca;">⚠️ ALERTA: Gastos pendentes altos!</div>', unsafe_allow_html=True)
+                elif saldo > 0:
+                    st.markdown('<div class="saude-box" style="background-color: #064e3b; color: #a7f3d0;">✅ EXCELENTE: Saldo positivo!</div>', unsafe_allow_html=True)
         else:
-            st.info("Lance dados para ver a análise.")
+            st.info("Aguardando dados...")
 
-    # --- SONHOS ---
     st.divider()
     st.subheader("🚀 Meus Sonhos")
     s1, s2 = st.columns([1, 2])
