@@ -107,11 +107,10 @@ if not st.session_state['logged_in']:
     with center_col:
         st.write("")
         if st.session_state['auth_mode'] == 'login':
-            # REMOVIDO: Tudo o que estava acima dos inputs (Quadrados, Logos, Nomes)
             st.markdown('<div class="login-card">', unsafe_allow_html=True)
-            
-            u = st.text_input("Usuário", placeholder="Seu usuário", key="user_login", label_visibility="collapsed")
-            p = st.text_input("Senha", type="password", placeholder="Sua senha", key="pass_login", label_visibility="collapsed")
+            st.markdown("<h1 style='color: #60a5fa; font-weight: 800; margin-bottom: 25px;'>METAFLUX</h1>", unsafe_allow_html=True)
+            u = st.text_input("Usuário", placeholder="Seu usuário", key="user_login")
+            p = st.text_input("Senha", type="password", placeholder="Sua senha", key="pass_login")
             
             c1, c2 = st.columns(2)
             c1.checkbox("Lembrar", key="rem")
@@ -162,7 +161,7 @@ if not st.session_state['logged_in']:
             st.markdown('</div>', unsafe_allow_html=True)
 
 else:
-    # --- APP LOGADO (MANTIDO EXATAMENTE IGUAL) ---
+    # --- APP LOGADO ---
     with st.sidebar:
         try: st.image("logo.png", use_column_width=True)
         except: st.title("📈 METAFLUX")
@@ -245,7 +244,7 @@ else:
             fig.update_layout(showlegend=(not privacidade), margin=dict(t=0,b=0,l=0,r=0), paper_bgcolor='rgba(0,0,0,0)', font_color="white")
             st.plotly_chart(fig, use_container_width=True)
 
-    # --- ABAIXO: SEÇÃO MEUS SONHOS ---
+    # --- ABAIXO: SEÇÃO MEUS SONHOS (RECUPERADA) ---
     st.divider()
     st.subheader("🚀 Meus Sonhos")
     s1, s2 = st.columns([1, 2])
