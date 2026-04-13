@@ -22,7 +22,7 @@ st.markdown("""
         background-image: radial-gradient(circle at top right, #1e3a8a, #020617);
     }
     
-    /* Cartão de Login Estilo Card */
+    /* Cartão de Login Estilo Card (Régua) */
     .login-card {
         background-color: #1e293b;
         padding: 40px;
@@ -48,7 +48,7 @@ st.markdown("""
     
     input { color: #f1f5f9 !important; font-size: 0.95rem !important; }
 
-    /* Botão Principal */
+    /* Botão Principal Estilizado (Login) */
     .stButton>button {
         background-color: #2563eb !important;
         color: white !important;
@@ -59,19 +59,42 @@ st.markdown("""
         border: none !important;
         margin-top: 10px;
     }
+    .stButton>button:hover {
+        background-color: #3b82f6 !important;
+    }
     
-    /* Barra de progresso verde neon */
-    .stProgress > div > div > div > div {
-        background-image: linear-gradient(to right, #3b82f6 , #10b981);
+    /* Linha de Opções (Remember / Forgot) */
+    .login-options {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 5px;
+        font-size: 0.85rem;
+    }
+    
+    /* Botões de Link (Create account, Forgot) */
+    .link-button button {
+        background: none !important;
+        border: none !important;
+        color: #94a3b8 !important;
+        text-decoration: underline !important;
+        padding: 0 !important;
+        font-size: 0.85rem !important;
+        width: auto !important;
+    }
+    .link-button button:hover {
+        color: #60a5fa !important;
     }
 
-    /* Rodapé e Links */
-    .link-footer { margin-top: 15px; font-size: 0.85rem; }
-    .link-footer button {
-        background: none !important; border: none !important;
-        color: #94a3b8 !important; text-decoration: underline !important;
+    /* Seção de Novo Cadastro */
+    .signup-section {
+        margin-top: 25px;
+        font-size: 0.9rem;
+        color: #94a3b8;
     }
-    .copyright { margin-top: 20px; font-size: 0.7rem; color: #475569; }
+    
+    /* Direitos Autorais */
+    .copyright { margin-top: 25px; font-size: 0.7rem; color: #475569; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -101,23 +124,34 @@ if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
 if 'auth_mode' not in st.session_state: st.session_state['auth_mode'] = 'login'
 if 'error_msg' not in st.session_state: st.session_state['error_msg'] = False
 
-# --- TELA DE LOGIN ---
+# --- TELA DE AUTENTICAÇÃO ---
 if not st.session_state['logged_in']:
     _, center_col, _ = st.columns([1, 1.5, 1])
     with center_col:
         st.write("")
+        st.write("")
+        
+        # MODO LOGIN
         if st.session_state['auth_mode'] == 'login':
             st.markdown('<div class="login-card">', unsafe_allow_html=True)
-            st.markdown("<h1 style='color: #60a5fa; font-weight: 800; margin-bottom: 25px;'>METAFLUX</h1>", unsafe_allow_html=True)
+            # Título Limpo (Quadrado removido)
+            st.markdown("<h1 style='color: #60a5fa; font-weight: 800; margin-bottom: 30px;'>METAFLUX</h1>", unsafe_allow_html=True)
             u = st.text_input("Usuário", placeholder="Seu usuário", key="user_login")
             p = st.text_input("Senha", type="password", placeholder="Sua senha", key="pass_login")
             
-            c1, c2 = st.columns(2)
-            c1.checkbox("Lembrar", key="rem")
-            if c2.button("Esqueci a senha", key="forgot"):
-                st.session_state['auth_mode'] = 'recover'; st.rerun()
+            # Linha de Opções (Remember / Forgot)
+            col_opt1, col_opt2 = st.columns([1, 1])
+            with col_opt1:
+                st.checkbox("Remember", key="rem_ch")
+            with col_opt2:
+                # Estilizado como link
+                st.markdown('<div class="link-button" style="text-align:right">', unsafe_allow_html=True)
+                if st.button("Forgot password?", key="forgot_btn"):
+                    st.session_state['auth_mode'] = 'recover'; st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
 
-            if st.button("ACESSAR PAINEL"):
+            # Botão Login
+            if st.button("Login"):
                 if u in st.session_state.db["users"] and st.session_state.db["users"][u]["password"] == p:
                     st.session_state['logged_in'] = True
                     st.session_state['current_user'] = u
@@ -129,35 +163,40 @@ if not st.session_state['logged_in']:
                 st.error("Dados incorretos!")
                 time.sleep(3); st.session_state['error_msg'] = False; st.rerun()
 
-            if st.button("Não tem conta? Cadastre-se"):
+            # Seção Not account? Create an account
+            st.markdown('<div class="signup-section">Not account?</div>', unsafe_allow_html=True)
+            st.markdown('<div class="link-button">', unsafe_allow_html=True)
+            if st.button("Create an account", key="signup_btn"):
                 st.session_state['auth_mode'] = 'signup'; st.rerun()
-            st.markdown('<div class="copyright">© 2026 MetaFlux. Direitos reservados.</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            st.markdown('<div class="copyright">© 2026 MetaFlux Pro. All rights reserved.</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
         elif st.session_state['auth_mode'] == 'signup':
             st.markdown('<div class="login-card">', unsafe_allow_html=True)
-            st.subheader("Nova Conta")
-            new_u = st.text_input("Usuário")
-            new_p = st.text_input("Senha", type="password")
-            new_s = st.text_input("Nome do filho? (Segurança)")
-            if st.button("CADASTRAR"):
+            st.subheader("New Account")
+            new_u = st.text_input("Username")
+            new_p = st.text_input("Password", type="password")
+            new_s = st.text_input("Security Question (Murillo?)")
+            if st.button("CREATE ACCOUNT"):
                 if new_u and new_p and new_s:
                     st.session_state.db["users"][new_u] = {"password": new_p, "security_answer": new_s}
-                    salvar_banco(st.session_state.db); st.success("Criado!"); time.sleep(2)
+                    salvar_banco(st.session_state.db); st.success("Created!"); time.sleep(2)
                     st.session_state['auth_mode'] = 'login'; st.rerun()
-            if st.button("Voltar"): st.session_state['auth_mode'] = 'login'; st.rerun()
+            if st.button("Back"): st.session_state['auth_mode'] = 'login'; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
         elif st.session_state['auth_mode'] == 'recover':
             st.markdown('<div class="login-card">', unsafe_allow_html=True)
-            st.subheader("Recuperação")
-            rec_u = st.text_input("Seu usuário")
+            st.subheader("Recover Password")
+            rec_u = st.text_input("Your Username")
             if rec_u in st.session_state.db["users"]:
-                ans = st.text_input("Resposta de segurança")
-                if st.button("VER SENHA"):
+                ans = st.text_input("Security Answer")
+                if st.button("SHOW PASSWORD"):
                     if ans.lower() == st.session_state.db["users"][rec_u]["security_answer"].lower():
-                        st.info(f"Sua senha: {st.session_state.db['users'][rec_u]['password']}")
-            if st.button("Voltar"): st.session_state['auth_mode'] = 'login'; st.rerun()
+                        st.info(f"Your password: {st.session_state.db['users'][rec_u]['password']}")
+            if st.button("Back"): st.session_state['auth_mode'] = 'login'; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
 else:
@@ -244,7 +283,7 @@ else:
             fig.update_layout(showlegend=(not privacidade), margin=dict(t=0,b=0,l=0,r=0), paper_bgcolor='rgba(0,0,0,0)', font_color="white")
             st.plotly_chart(fig, use_container_width=True)
 
-    # --- ABAIXO: SEÇÃO MEUS SONHOS (RECUPERADA) ---
+    # --- ABAIXO: SEÇÃO MEUS SONHOS ---
     st.divider()
     st.subheader("🚀 Meus Sonhos")
     s1, s2 = st.columns([1, 2])
