@@ -54,7 +54,6 @@ def carregar_banco():
         with open(DB_FILE, "r") as f:
             try:
                 data = json.load(f)
-                # Garantir chaves básicas
                 if "users" not in data: data["users"] = {"admin": {"password": "123", "security_answer": "Murillo"}}
                 if "recorrentes" not in data: data["recorrentes"] = []
                 if "metas_sonhos" not in data: data["metas_sonhos"] = []
@@ -137,8 +136,143 @@ else:
         mes_ref = st.selectbox("Mês de Referência", MESES, index=3)
         if st.button("🚪 Sair"): st.session_state['logged_in'] = False; st.rerun()
 
-    # Inicialização do Mês
+    # --- INICIALIZAÇÃO DO MÊS (FIXADO) ---
     if mes_ref not in st.session_state.db:
-        # Puxa recorrentes automaticamente ao criar o mês
         st.session_state.db[mes_ref] = {
-            "gastos": [g.copy() for g in
+            "gastos": [g.copy() for g in st.session_state.db["recorrentes"]],
+            "investido": 0.0
+        }
+        for g in st.session_state.db[mes_ref]["gastos"]: 
+            g["pago"] = False
+
+    d_mes = st.session_state.db[mes_ref]
+    t_gastos = sum(float(g['valor']) for g in d_mes['gastos'])
+    t_pago = sum(float(g['valor']) for g in d_mes['gastos'] if g.get('pago'))
+    inv_mes = float(d_mes.get('investido', 0.0))
+    patrimonio = sum(float(s['acumulado']) for s in st.session_state.db.get('metas_sonhos', []))
+
+    # --- HEADER GAMIFICADO ---
+    st.markdown("### 🧱 Status do Babycraft")
+    c_img, c_msg = st.columns([1, 5])
+    
+    if inv_mes >= (renda_fixa * 0.2):
+        status, cor, icon = "Babycraft está em modo DIAMANTE!", "#10b981", "💎"
+    elif t_pago > (t_gastos * 0.5):
+        status, cor, icon = "Contas em dia. O peixinho está nadando tranquilo.", "#3b82f6", "🐟"
+    else:
+        status, cor, icon = "Babycraft precisa minerar mais... contas pendentes!", "#ef4444", "⚒️"
+    
+    c_msg.markdown(f"""<div style='background:{cor}; padding:15px; border-radius:12px; color:white; font-weight:bold;'>
+    {icon} {status}</div>""", unsafe_allow_html=True)
+
+    tab_m, tab_s, tab_h = st.tabs(["📅 Gestão Mensal", "🛡️ Saúde & Sonhos", "📊 Histórico"])
+
+    with tab_m:
+        st.write("")
+        col1, col2, col3, col4 = st.columns(4)
+        def fmt(v): return "R$ ****" if privacidade else f"R$ {v:,.2f}"
+        
+        col1.metric("Total Gastos", fmt(t_gastos))
+        col2.metric("Pago", fmt(t_pago))
+        col3.metric("Investido", fmt(inv_mes))
+        col4.metric("Saldo Livre", fmt(renda_fixa - t_gastos - inv_mes))
+
+        st.divider()
+        cl1, cl2 = st.columns([1.5, 1])
+        
+        with cl1:
+            st.subheader("📝 Lançamentos")
+            if st.button("➕ Novo Gasto Extra"):
+                d_mes["gastos"].append({"item": "Novo", "valor": 0.0, "pago": False, "vencimento": 10})
+                salvar_banco(st.session_state.db); st.rerun()
+
+            with st.container(height=400, border=True):
+                idx_del = None
+                for i, g in enumerate(d_mes["gastos"]):
+                    with st.expander(f"📌 {g['item']} - Dia {g.get('vencimento',10)}"):
+                        cx1, cx2, cx3, cx4 = st.columns([2, 1, 1, 0.5])
+                        g["item"] = cx1.text_input("Item", g["item"], key=f"it_{mes_ref}_{i}")
+                        g["valor"] = cx2.number_input("Valor", value=float(g["valor"]), key=f"vl_{mes_ref}_{i}")
+                        g["vencimento"] = cx3.number_input("Venc.", 1, 31, int(g.get("vencimento",10)), key=f"vc_{mes_ref}_{i}")
+                        g["pago"] = cx4.checkbox("OK", value=g.get("pago", False), key=f"pg_{mes_ref}_{i}")
+                        if st.button("🗑️", key=f"del_{mes_ref}_{i}"): idx_del = i
+                if idx_del is not None:
+                    d_mes["gastos"].pop(idx_del); salvar_banco(st.session_state.db); st.rerun()
+
+        with cl2:
+            st.subheader("📊 Resumo Visual")
+            if not privacidade:
+                df_p = pd.DataFrame({"Cat": ["Pago", "Pendente", "Investido"], "Val": [t_pago, t_gastos-t_pago, inv_mes]})
+                fig = px.pie(df_p, values="Val", names="Cat", hole=0.5, color="Cat",
+                             color_discrete_map={"Pago": "#10b981", "Pendente": "#ef4444", "Investido": "#f59e0b"})
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with st.form("aporte"):
+                st.write("Aporte de Investimento")
+                novo_inv = st.number_input("Valor", value=inv_mes)
+                if st.form_submit_button("Confirmar Investimento"):
+                    d_mes["investido"] = novo_inv
+                    salvar_banco(st.session_state.db); st.rerun()
+
+    with tab_s:
+        c_res, c_lib = st.columns(2)
+        custo_vida = t_gastos if t_gastos > 0 else 1.0
+        meta_reserva = custo_vida * 6
+        prog_reserva = min(patrimonio / meta_reserva, 1.0)
+        
+        with c_res:
+            st.markdown('<div class="status-card">', unsafe_allow_html=True)
+            st.markdown("#### 🛡️ Reserva de Emergência")
+            st.progress(prog_reserva)
+            st.write(f"Cobertura: **{patrimonio/custo_vida:.1f} meses**")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        with c_lib:
+            patrimonio_liberdade = (custo_vida * 12) / 0.08
+            prog_lib = min(patrimonio / patrimonio_liberdade, 1.0)
+            st.markdown('<div class="status-card">', unsafe_allow_html=True)
+            st.markdown("#### 🕊️ Independência")
+            st.progress(prog_lib)
+            st.write(f"Progresso: **{prog_lib*100:.2f}%**")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        st.divider()
+        st.subheader("🚀 Meus Sonhos")
+        s_col1, s_col2 = st.columns([1, 2])
+        with s_col1:
+            with st.form("novo_sonho"):
+                n_s = st.text_input("Qual o seu sonho?")
+                v_s = st.number_input("Valor Alvo R$", min_value=0.0)
+                if st.form_submit_button("Criar Meta"):
+                    st.session_state.db["metas_sonhos"].append({"nome": n_s, "alvo": v_s, "acumulado": 0.0})
+                    salvar_banco(st.session_state.db); st.rerun()
+        with s_col2:
+            idx_s_del = None
+            for i, s in enumerate(st.session_state.db["metas_sonhos"]):
+                alvo, acum = float(s['alvo']), float(s['acumulado'])
+                prog = min(acum/alvo, 1.0) if alvo > 0 else 0.0
+                with st.expander(f"⭐ {s['nome']} - {prog*100:.1f}%"):
+                    cs1, cs2, cs3 = st.columns([2, 1, 0.5])
+                    cs1.progress(prog)
+                    dep = cs2.number_input("Aportar", min_value=0.0, key=f"dep_{i}")
+                    if cs2.button("Adicionar", key=f"btn_dep_{i}"):
+                        s['acumulado'] += dep; salvar_banco(st.session_state.db); st.rerun()
+                    if cs3.button("🗑️", key=f"del_s_{i}"): idx_s_del = i
+            if idx_s_del is not None:
+                st.session_state.db["metas_sonhos"].pop(idx_s_del); salvar_banco(st.session_state.db); st.rerun()
+
+    with tab_h:
+        st.subheader("📈 Evolução")
+        dados_h = []
+        for m in MESES:
+            if m in st.session_state.db:
+                g_m = sum(float(x['valor']) for x in st.session_state.db[m]['gastos'])
+                i_m = float(st.session_state.db[m].get('investido', 0.0))
+                if g_m > 0 or i_m > 0:
+                    dados_h.append({"Mês": m, "Gastos": g_m, "Investido": i_m})
+        if dados_h:
+            df_h = pd.DataFrame(dados_h)
+            st.plotly_chart(px.bar(df_h, x="Mês", y=["Gastos", "Investido"], barmode="group"), use_container_width=True)
+            st.table(df_h)
+
+    salvar_banco(st.session_state.db)
