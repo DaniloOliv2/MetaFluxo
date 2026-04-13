@@ -1,4 +1,4 @@
-```python
+
 import streamlit as st
 import json
 import os
@@ -349,4 +349,4 @@ else:
         st.plotly_chart(fig, use_container_width=True)
 
     salvar_banco(st.session_state.db)
-```
+
