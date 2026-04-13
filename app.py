@@ -109,9 +109,9 @@ if not st.session_state['logged_in']:
         if st.session_state['auth_mode'] == 'login':
             st.markdown('<div class="login-card">', unsafe_allow_html=True)
             
-            # --- AJUSTE REALIZADO: QUADRADO REMOVIDO E NOME AUMENTADO ---
-            st.markdown("<h1 style='color: #60a5fa; font-weight: 800; font-size: 2.5rem; margin-bottom: 25px;'>METAFLUX</h1>", unsafe_allow_html=True)
-            # -------------------------------------------------------------
+            # --- TODA A SEÇÃO SUPERIOR FOI REMOVIDA (QUADRADO E NOME METAFLUX) ---
+            # O card agora começa direto nos inputs abaixo.
+            # ---------------------------------------------------------------------
             
             u = st.text_input("Usuário", placeholder="Seu usuário", key="user_login")
             p = st.text_input("Senha", type="password", placeholder="Sua senha", key="pass_login")
