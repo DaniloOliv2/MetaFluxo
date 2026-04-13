@@ -64,6 +64,7 @@ st.markdown("""
     .stButton>button:hover { background-color: #3b82f6 !important; }
 
     /* --- ESTILO PARA LINKS DISCRETOS (FORGOT E CREATE) --- */
+    /* Remove o visual de botão dos links secundários */
     .link-wrapper {
         display: flex;
         justify-content: space-between;
@@ -71,7 +72,6 @@ st.markdown("""
         margin-top: -15px; /* Ajuste para subir os links */
     }
     
-    /* Remove o visual de botão dos links secundários */
     .stButton.discreto button {
         background: none !important;
         border: none !important;
