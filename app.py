@@ -13,23 +13,22 @@ try:
 except:
     st.set_page_config(page_title="MetaFlux Pro 📈", layout="wide", page_icon="📈")
 
-# --- ESTILO CSS AVANÇADO (ESTILO CARD GLASS) ---
+# --- ESTILO CSS AVANÇADO (CORES E FUNDO CONFORME REFERÊNCIA) ---
 st.markdown("""
     <style>
-    /* Fundo degradê escuro */
+    /* Fundo degradê conforme imagem de referência */
     .stApp { 
         background-color: #020617;
         background-image: radial-gradient(circle at top right, #1e3a8a, #020617);
     }
     
-    /* Cartão de Login Estilo Glassmorphism (na Régua) */
+    /* Cartão de Login Estilo Card */
     .login-card {
-        background: rgba(30, 41, 59, 0.7); /* Fundo Translúcido */
+        background-color: #1e293b;
         padding: 40px;
-        border-radius: 20px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        backdrop-filter: blur(10px); /* Efeito Blur de Vidro */
+        border-radius: 24px;
+        border: 1px solid #334155;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.6);
         text-align: center;
         max-width: 380px;
         margin: auto;
@@ -41,15 +40,15 @@ st.markdown("""
     
     /* Inputs Slim e Modernos */
     div[data-baseweb="input"] {
-        background-color: rgba(2, 6, 23, 0.8) !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        background-color: #0f172a !important;
+        border: 1px solid #334155 !important;
         border-radius: 10px !important;
         min-height: 40px !important;
     }
     
     input { color: #f1f5f9 !important; font-size: 0.95rem !important; }
 
-    /* Botão Principal Estilizado */
+    /* Botão Principal */
     .stButton>button {
         background-color: #2563eb !important;
         color: white !important;
@@ -59,11 +58,11 @@ st.markdown("""
         width: 100% !important;
         border: none !important;
         margin-top: 10px;
-        transition: 0.3s;
     }
-    .stButton>button:hover {
-        background-color: #3b82f6 !important;
-        box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+    
+    /* Barra de progresso verde neon */
+    .stProgress > div > div > div > div {
+        background-image: linear-gradient(to right, #3b82f6 , #10b981);
     }
 
     /* Rodapé e Links */
@@ -102,45 +101,36 @@ if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
 if 'auth_mode' not in st.session_state: st.session_state['auth_mode'] = 'login'
 if 'error_msg' not in st.session_state: st.session_state['error_msg'] = False
 
-# --- FUNÇÕES DE NAVEGAÇÃO INTERNA ---
-def navegar_para(modo):
-    st.session_state['auth_mode'] = modo
-    st.session_state['error_msg'] = False # Limpa erros ao navegar
-    st.rerun()
-
-# --- TELA DE AUTENTICAÇÃO ---
+# --- TELA DE LOGIN ---
 if not st.session_state['logged_in']:
     _, center_col, _ = st.columns([1, 1.5, 1])
     with center_col:
         st.write("")
-        st.write("")
-        
-        # MODO LOGIN
         if st.session_state['auth_mode'] == 'login':
             st.markdown('<div class="login-card">', unsafe_allow_html=True)
             st.markdown("<h1 style='color: #60a5fa; font-weight: 800; margin-bottom: 25px;'>METAFLUX</h1>", unsafe_allow_html=True)
             u = st.text_input("Usuário", placeholder="Seu usuário", key="user_login")
             p = st.text_input("Senha", type="password", placeholder="Sua senha", key="pass_login")
             
-            c1, c2 = st.columns([1.5, 1])
-            c1.checkbox("Lembrar", key="rem_ch")
-            # Navegação segura
-            if c2.button("Esqueci a senha", key="forgot_btn"): navegar_para('recover')
+            c1, c2 = st.columns(2)
+            c1.checkbox("Lembrar", key="rem")
+            if c2.button("Esqueci a senha", key="forgot"):
+                st.session_state['auth_mode'] = 'recover'; st.rerun()
 
             if st.button("ACESSAR PAINEL"):
                 if u in st.session_state.db["users"] and st.session_state.db["users"][u]["password"] == p:
                     st.session_state['logged_in'] = True
                     st.session_state['current_user'] = u
-                    navegar_para('login') # Apenas rerun simples
+                    st.rerun()
                 else:
                     st.session_state['error_msg'] = True; st.rerun()
             
-            # Mensagem de erro que some após 3s
             if st.session_state['error_msg']:
                 st.error("Dados incorretos!")
                 time.sleep(3); st.session_state['error_msg'] = False; st.rerun()
 
-            if st.button("Não tem conta? Cadastre-se"): navegar_para('signup')
+            if st.button("Não tem conta? Cadastre-se"):
+                st.session_state['auth_mode'] = 'signup'; st.rerun()
             st.markdown('<div class="copyright">© 2026 MetaFlux. Direitos reservados.</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
@@ -149,13 +139,13 @@ if not st.session_state['logged_in']:
             st.subheader("Nova Conta")
             new_u = st.text_input("Usuário")
             new_p = st.text_input("Senha", type="password")
-            new_s = st.text_input("Resposta de segurança")
+            new_s = st.text_input("Nome do filho? (Segurança)")
             if st.button("CADASTRAR"):
                 if new_u and new_p and new_s:
                     st.session_state.db["users"][new_u] = {"password": new_p, "security_answer": new_s}
                     salvar_banco(st.session_state.db); st.success("Criado!"); time.sleep(2)
-                    navegar_para('login')
-            if st.button("Voltar ao Login"): navegar_para('login')
+                    st.session_state['auth_mode'] = 'login'; st.rerun()
+            if st.button("Voltar"): st.session_state['auth_mode'] = 'login'; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
         elif st.session_state['auth_mode'] == 'recover':
@@ -167,7 +157,7 @@ if not st.session_state['logged_in']:
                 if st.button("VER SENHA"):
                     if ans.lower() == st.session_state.db["users"][rec_u]["security_answer"].lower():
                         st.info(f"Sua senha: {st.session_state.db['users'][rec_u]['password']}")
-            if st.button("Voltar ao Login"): navegar_para('login')
+            if st.button("Voltar"): st.session_state['auth_mode'] = 'login'; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
 else:
@@ -254,7 +244,7 @@ else:
             fig.update_layout(showlegend=(not privacidade), margin=dict(t=0,b=0,l=0,r=0), paper_bgcolor='rgba(0,0,0,0)', font_color="white")
             st.plotly_chart(fig, use_container_width=True)
 
-    # --- ABAIXO: SEÇÃO MEUS SONHOS ---
+    # --- ABAIXO: SEÇÃO MEUS SONHOS (RECUPERADA) ---
     st.divider()
     st.subheader("🚀 Meus Sonhos")
     s1, s2 = st.columns([1, 2])
