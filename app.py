@@ -13,7 +13,7 @@ try:
 except:
     st.set_page_config(page_title="MetaFlux Pro 📈", layout="wide", page_icon="📈")
 
-# --- ESTILO CSS (FOCO NO BOTÃO DE LOGIN) ---
+# --- ESTILO CSS (FOCO NO BOTÃO DE LOGIN SLIM) ---
 st.markdown("""
     <style>
     .stApp { 
@@ -59,14 +59,14 @@ st.markdown("""
         width: auto !important;
     }
 
-    /* --- AJUSTE: BOTÃO LOGIN DE PONTA A PONTA, FINO E DISCRETO --- */
+    /* BOTÃO LOGIN: DE PONTA A PONTA E FINO */
     .stButton.login-btn button {
         background-color: #2563eb !important;
         color: white !important;
         border-radius: 8px !important;
         font-weight: 600 !important;
-        height: 38px !important; /* Mais fino */
-        width: 100% !important; /* De ponta a ponta */
+        height: 38px !important; 
+        width: 100% !important; 
         border: none !important;
         margin-top: 20px;
         font-size: 0.9rem !important;
@@ -81,13 +81,36 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- LOGIN ---
+# --- BANCO DE DADOS (CONEXÃO RESTAURADA) ---
+DB_FILE = "metafluxo_db.json"
+def carregar_banco():
+    if os.path.exists(DB_FILE):
+        with open(DB_FILE, "r") as f:
+            try: return json.load(f)
+            except: pass
+    return {
+        "users": {"admin": {"password": "123", "security_answer": "Murillo"}}, 
+        "metas_sonhos": [], 
+        "config": {"categorias": {"🏠 Moradia": "#3498db", "🍎 Alimentação": "#e67e22", "🚗 Transporte": "#9b59b6", "🎡 Lazer": "#f1c40f", "💊 Saúde": "#e74c3c", "🛠️ Outros": "#95a5a6"}}
+    }
+
+def salvar_banco(dados):
+    with open(DB_FILE, "w") as f:
+        json.dump(dados, f, indent=4)
+
+if 'db' not in st.session_state:
+    st.session_state.db = carregar_banco()
+
+# --- ESTADOS DE SESSÃO ---
 if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
 if 'auth_mode' not in st.session_state: st.session_state['auth_mode'] = 'login'
+if 'error_msg' not in st.session_state: st.session_state['error_msg'] = False
 
+# --- TELA DE LOGIN ---
 if not st.session_state['logged_in']:
     _, center_col, _ = st.columns([1, 1.5, 1])
     with center_col:
+        st.write("")
         if st.session_state['auth_mode'] == 'login':
             st.markdown('<div class="login-card">', unsafe_allow_html=True)
             u = st.text_input("Usuário", placeholder="Seu usuário", key="user_login", label_visibility="collapsed")
@@ -101,15 +124,59 @@ if not st.session_state['logged_in']:
             st.markdown('</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-            # Botão Login com a nova classe CSS
             st.markdown('<div class="stButton login-btn">', unsafe_allow_html=True)
-            if st.button("ACESSAR PAINEL"):
-                # Lógica de login mantida
-                if u == "admin" and p == "123": # Exemplo simples para teste
-                    st.session_state['logged_in'] = True; st.rerun()
+            if st.button("Login", key="main_login_btn"):
+                # Verificação correta no seu banco de dados
+                if u in st.session_state.db["users"] and st.session_state.db["users"][u]["password"] == p:
+                    st.session_state['logged_in'] = True
+                    st.session_state['current_user'] = u
+                    st.rerun()
+                else:
+                    st.session_state['error_msg'] = True; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
+            
+            if st.session_state['error_msg']:
+                st.error("Dados incorretos!")
+                time.sleep(2); st.session_state['error_msg'] = False; st.rerun()
+
+            if st.button("Não tem conta? Cadastre-se"):
+                st.session_state['auth_mode'] = 'signup'; st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        elif st.session_state['auth_mode'] == 'signup':
+            st.markdown('<div class="login-card">', unsafe_allow_html=True)
+            st.subheader("Nova Conta")
+            new_u = st.text_input("Usuário")
+            new_p = st.text_input("Senha", type="password")
+            new_s = st.text_input("Nome do filho? (Segurança)")
+            if st.button("CADASTRAR"):
+                if new_u and new_p and new_s:
+                    st.session_state.db["users"][new_u] = {"password": new_p, "security_answer": new_s}
+                    salvar_banco(st.session_state.db); st.success("Criado!"); time.sleep(2)
+                    st.session_state['auth_mode'] = 'login'; st.rerun()
+            if st.button("Voltar"): st.session_state['auth_mode'] = 'login'; st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        elif st.session_state['auth_mode'] == 'recover':
+            st.markdown('<div class="login-card">', unsafe_allow_html=True)
+            st.subheader("Recuperação")
+            rec_u = st.text_input("Seu usuário")
+            if rec_u in st.session_state.db["users"]:
+                ans = st.text_input("Resposta de segurança")
+                if st.button("VER SENHA"):
+                    if ans.lower() == st.session_state.db["users"][rec_u]["security_answer"].lower():
+                        st.info(f"Sua senha: {st.session_state.db['users'][rec_u]['password']}")
+            if st.button("Voltar"): st.session_state['auth_mode'] = 'login'; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
 else:
-    st.title("🚀 Dashboard")
-    if st.button("Sair"): st.session_state['logged_in'] = False; st.rerun()
+    # --- DASHBOARD (RESTAURADO) ---
+    with st.sidebar:
+        try: st.image("logo.png", use_column_width=True)
+        except: st.title("📈 METAFLUX")
+        st.divider()
+        if st.button("🚪 Sair"):
+            st.session_state['logged_in'] = False; st.rerun()
+
+    st.title(f"🚀 Dashboard")
+    st.write("Bem-vindo de volta!")
