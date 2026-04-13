@@ -107,14 +107,11 @@ if not st.session_state['logged_in']:
     with center_col:
         st.write("")
         if st.session_state['auth_mode'] == 'login':
+            # REMOVIDO: Tudo o que estava acima dos inputs (Quadrados, Logos, Nomes)
             st.markdown('<div class="login-card">', unsafe_allow_html=True)
             
-            # --- TODA A SEÇÃO SUPERIOR FOI REMOVIDA (QUADRADO E NOME METAFLUX) ---
-            # O card agora começa direto nos inputs abaixo.
-            # ---------------------------------------------------------------------
-            
-            u = st.text_input("Usuário", placeholder="Seu usuário", key="user_login")
-            p = st.text_input("Senha", type="password", placeholder="Sua senha", key="pass_login")
+            u = st.text_input("Usuário", placeholder="Seu usuário", key="user_login", label_visibility="collapsed")
+            p = st.text_input("Senha", type="password", placeholder="Sua senha", key="pass_login", label_visibility="collapsed")
             
             c1, c2 = st.columns(2)
             c1.checkbox("Lembrar", key="rem")
