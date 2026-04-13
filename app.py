@@ -108,7 +108,11 @@ if not st.session_state['logged_in']:
         st.write("")
         if st.session_state['auth_mode'] == 'login':
             st.markdown('<div class="login-card">', unsafe_allow_html=True)
-            st.markdown("<h1 style='color: #60a5fa; font-weight: 800; margin-bottom: 25px;'>METAFLUX</h1>", unsafe_allow_html=True)
+            
+            # --- AJUSTE REALIZADO: QUADRADO REMOVIDO E NOME AUMENTADO ---
+            st.markdown("<h1 style='color: #60a5fa; font-weight: 800; font-size: 2.5rem; margin-bottom: 25px;'>METAFLUX</h1>", unsafe_allow_html=True)
+            # -------------------------------------------------------------
+            
             u = st.text_input("Usuário", placeholder="Seu usuário", key="user_login")
             p = st.text_input("Senha", type="password", placeholder="Sua senha", key="pass_login")
             
@@ -161,7 +165,7 @@ if not st.session_state['logged_in']:
             st.markdown('</div>', unsafe_allow_html=True)
 
 else:
-    # --- APP LOGADO ---
+    # --- APP LOGADO (MANTIDO EXATAMENTE IGUAL) ---
     with st.sidebar:
         try: st.image("logo.png", use_column_width=True)
         except: st.title("📈 METAFLUX")
@@ -244,7 +248,7 @@ else:
             fig.update_layout(showlegend=(not privacidade), margin=dict(t=0,b=0,l=0,r=0), paper_bgcolor='rgba(0,0,0,0)', font_color="white")
             st.plotly_chart(fig, use_container_width=True)
 
-    # --- ABAIXO: SEÇÃO MEUS SONHOS (RECUPERADA) ---
+    # --- ABAIXO: SEÇÃO MEUS SONHOS ---
     st.divider()
     st.subheader("🚀 Meus Sonhos")
     s1, s2 = st.columns([1, 2])
