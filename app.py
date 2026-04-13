@@ -13,10 +13,10 @@ try:
 except:
     st.set_page_config(page_title="MetaFlux Pro 📈", layout="wide", page_icon="📈")
 
-# --- ESTILO CSS AVANÇADO (CORES E FUNDO CONFORME REFERÊNCIA) ---
+# --- ESTILO CSS AVANÇADO ---
 st.markdown("""
     <style>
-    /* Fundo degradê conforme imagem de referência */
+    /* Fundo degradê */
     .stApp { 
         background-color: #020617;
         background-image: radial-gradient(circle at top right, #1e3a8a, #020617);
@@ -48,8 +48,24 @@ st.markdown("""
     
     input { color: #f1f5f9 !important; font-size: 0.95rem !important; }
 
-    /* Botão Principal */
-    .stButton>button {
+    /* Estilo para links discretos (Forgot e Create account) */
+    .stButton.discreto button {
+        background: none !important;
+        border: none !important;
+        color: #94a3b8 !important;
+        text-decoration: underline !important;
+        font-size: 0.85rem !important;
+        font-weight: 400 !important;
+        padding: 0 !important;
+        width: auto !important;
+        box-shadow: none !important;
+    }
+    .stButton.discreto button:hover {
+        color: #f1f5f9 !important;
+    }
+
+    /* Botão Login Destacado */
+    .btn-login button {
         background-color: #2563eb !important;
         color: white !important;
         border-radius: 10px !important;
@@ -59,18 +75,12 @@ st.markdown("""
         border: none !important;
         margin-top: 10px;
     }
-    
+
     /* Barra de progresso verde neon */
     .stProgress > div > div > div > div {
         background-image: linear-gradient(to right, #3b82f6 , #10b981);
     }
 
-    /* Rodapé e Links */
-    .link-footer { margin-top: 15px; font-size: 0.85rem; }
-    .link-footer button {
-        background: none !important; border: none !important;
-        color: #94a3b8 !important; text-decoration: underline !important;
-    }
     .copyright { margin-top: 20px; font-size: 0.7rem; color: #475569; }
     </style>
     """, unsafe_allow_html=True)
@@ -108,29 +118,43 @@ if not st.session_state['logged_in']:
         st.write("")
         if st.session_state['auth_mode'] == 'login':
             st.markdown('<div class="login-card">', unsafe_allow_html=True)
+            # 1. QUADRADO REMOVIDO (Apenas texto)
             st.markdown("<h1 style='color: #60a5fa; font-weight: 800; margin-bottom: 25px;'>METAFLUX</h1>", unsafe_allow_html=True)
-            u = st.text_input("Usuário", placeholder="Seu usuário", key="user_login")
-            p = st.text_input("Senha", type="password", placeholder="Sua senha", key="pass_login")
+            u = st.text_input("Usuário", placeholder="Seu usuário", key="user_login", label_visibility="collapsed")
+            p = st.text_input("Senha", type="password", placeholder="Sua senha", key="pass_login", label_visibility="collapsed")
             
+            # 2 e 3. REMEMBER E FORGOT NA MESMA LINHA E TRADUZIDOS
             c1, c2 = st.columns(2)
-            c1.checkbox("Lembrar", key="rem")
-            if c2.button("Esqueci a senha", key="forgot"):
-                st.session_state['auth_mode'] = 'recover'; st.rerun()
+            with c1:
+                st.checkbox("Remember", key="rem")
+            with c2:
+                st.markdown('<div class="stButton discreto" style="text-align:right">', unsafe_allow_html=True)
+                if st.button("Forgot password?", key="forgot"):
+                    st.session_state['auth_mode'] = 'recover'; st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
 
-            if st.button("ACESSAR PAINEL"):
+            # 4. BOTÃO LOGIN DESTACADO
+            st.markdown('<div class="btn-login">', unsafe_allow_html=True)
+            if st.button("Login", key="main_login_btn"):
                 if u in st.session_state.db["users"] and st.session_state.db["users"][u]["password"] == p:
                     st.session_state['logged_in'] = True
                     st.session_state['current_user'] = u
                     st.rerun()
                 else:
                     st.session_state['error_msg'] = True; st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
             
             if st.session_state['error_msg']:
                 st.error("Dados incorretos!")
                 time.sleep(3); st.session_state['error_msg'] = False; st.rerun()
 
-            if st.button("Não tem conta? Cadastre-se"):
+            # 4. SEÇÃO NOT ACCOUNT E CREATE ACCOUNT DISCRETO
+            st.markdown("<div style='margin-top: 20px; color: #94a3b8; font-size: 0.9rem;'>Not account?</div>", unsafe_allow_html=True)
+            st.markdown('<div class="stButton discreto" style="text-align:center">', unsafe_allow_html=True)
+            if st.button("Create an account", key="signup_redirect"):
                 st.session_state['auth_mode'] = 'signup'; st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+
             st.markdown('<div class="copyright">© 2026 MetaFlux. Direitos reservados.</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
@@ -161,7 +185,7 @@ if not st.session_state['logged_in']:
             st.markdown('</div>', unsafe_allow_html=True)
 
 else:
-    # --- APP LOGADO ---
+    # --- APP LOGADO (MANTIDO EXATAMENTE COMO VOCÊ MANDOU) ---
     with st.sidebar:
         try: st.image("logo.png", use_column_width=True)
         except: st.title("📈 METAFLUX")
@@ -244,7 +268,7 @@ else:
             fig.update_layout(showlegend=(not privacidade), margin=dict(t=0,b=0,l=0,r=0), paper_bgcolor='rgba(0,0,0,0)', font_color="white")
             st.plotly_chart(fig, use_container_width=True)
 
-    # --- ABAIXO: SEÇÃO MEUS SONHOS (RECUPERADA) ---
+    # --- ABAIXO: SEÇÃO MEUS SONHOS ---
     st.divider()
     st.subheader("🚀 Meus Sonhos")
     s1, s2 = st.columns([1, 2])
