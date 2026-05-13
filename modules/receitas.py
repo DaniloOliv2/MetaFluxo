@@ -1,0 +1,205 @@
+import streamlit as st
+from utils.database import conectar
+
+
+def fmt_moeda(valor):
+    try:
+        return f"R$ {float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except Exception:
+        return "R$ 0,00"
+
+
+def garantir_tabela_receitas():
+    conn = conectar()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS receitas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            usuario_id INTEGER NOT NULL,
+            mes TEXT NOT NULL,
+            descricao TEXT NOT NULL,
+            categoria TEXT NOT NULL,
+            conta_id INTEGER,
+            valor REAL NOT NULL DEFAULT 0,
+            recebida INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+
+def listar_contas(usuario_id):
+    conn = conectar()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT id, nome, tipo, saldo
+        FROM contas
+        WHERE usuario_id = ?
+        ORDER BY nome ASC
+    """, (usuario_id,))
+
+    contas = cursor.fetchall()
+    conn.close()
+    return contas
+
+
+def criar_receita(usuario_id, mes, descricao, categoria, conta_id, valor, recebida):
+    conn = conectar()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO receitas (usuario_id, mes, descricao, categoria, conta_id, valor, recebida)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (usuario_id, mes, descricao, categoria, conta_id, float(valor), int(recebida)))
+
+    if recebida and conta_id:
+        cursor.execute("""
+            UPDATE contas
+            SET saldo = saldo + ?
+            WHERE id = ? AND usuario_id = ?
+        """, (float(valor), conta_id, usuario_id))
+
+    conn.commit()
+    conn.close()
+
+
+def listar_receitas(usuario_id, mes):
+    conn = conectar()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT receitas.*, contas.nome AS conta_nome
+        FROM receitas
+        LEFT JOIN contas ON contas.id = receitas.conta_id
+        WHERE receitas.usuario_id = ? AND receitas.mes = ?
+        ORDER BY receitas.id DESC
+    """, (usuario_id, mes))
+
+    receitas = cursor.fetchall()
+    conn.close()
+    return receitas
+
+
+def deletar_receita(usuario_id, receita_id):
+    conn = conectar()
+    cursor = conn.cursor()
+
+    receita = cursor.execute("""
+        SELECT *
+        FROM receitas
+        WHERE id = ? AND usuario_id = ?
+    """, (receita_id, usuario_id)).fetchone()
+
+    if receita and receita["recebida"] and receita["conta_id"]:
+        cursor.execute("""
+            UPDATE contas
+            SET saldo = saldo - ?
+            WHERE id = ? AND usuario_id = ?
+        """, (float(receita["valor"]), receita["conta_id"], usuario_id))
+
+    cursor.execute("""
+        DELETE FROM receitas
+        WHERE id = ? AND usuario_id = ?
+    """, (receita_id, usuario_id))
+
+    conn.commit()
+    conn.close()
+
+
+def tela_receitas(usuario_id, mes):
+    garantir_tabela_receitas()
+
+    st.subheader("💵 Receitas")
+
+    categorias = [
+        "💼 Salário",
+        "💰 Renda extra",
+        "📲 PIX recebido",
+        "🛒 Venda",
+        "🎁 Presente",
+        "💸 Reembolso",
+        "📈 Rendimentos",
+        "🛠️ Outros"
+    ]
+
+    contas = listar_contas(usuario_id)
+
+    if not contas:
+        st.warning("Antes de cadastrar receitas, crie pelo menos uma conta na aba 🏦 Contas.")
+        return
+
+    contas_opcoes = {f"{conta['nome']} — {conta['tipo']}": conta["id"] for conta in contas}
+
+    with st.expander("➕ Nova receita", expanded=False):
+        with st.form("form_nova_receita", clear_on_submit=True):
+
+            descricao = st.text_input("Descrição", placeholder="Ex: Salário, PIX, venda, renda extra")
+
+            categoria = st.selectbox("Categoria", categorias)
+
+            conta_nome = st.selectbox("Conta de destino", list(contas_opcoes.keys()))
+
+            valor = st.number_input(
+                "Valor",
+                min_value=0.0,
+                step=100.0,
+                format="%.2f",
+                help="Para trinta mil, digite 30000. O sistema exibirá como R$ 30.000,00."
+            )
+
+            recebida = st.checkbox("Já recebi esse valor?", value=True)
+
+            enviar = st.form_submit_button("Cadastrar receita", use_container_width=True)
+
+            if enviar:
+                if not descricao.strip():
+                    st.warning("Informe a descrição da receita.")
+                elif valor <= 0:
+                    st.warning("Informe um valor maior que zero.")
+                else:
+                    criar_receita(
+                        usuario_id,
+                        mes,
+                        descricao.strip(),
+                        categoria,
+                        contas_opcoes[conta_nome],
+                        valor,
+                        recebida
+                    )
+                    st.success("Receita cadastrada com sucesso!")
+                    st.rerun()
+
+    receitas = listar_receitas(usuario_id, mes)
+
+    total_recebido = sum(float(r["valor"]) for r in receitas if r["recebida"])
+    total_a_receber = sum(float(r["valor"]) for r in receitas if not r["recebida"])
+
+    c1, c2 = st.columns(2)
+    c1.metric("✅ Recebido", fmt_moeda(total_recebido))
+    c2.metric("⏳ A receber", fmt_moeda(total_a_receber))
+
+    st.divider()
+
+    if not receitas:
+        st.info("Nenhuma receita cadastrada neste mês.")
+        return
+
+    for receita in receitas:
+        status = "✅ Recebida" if receita["recebida"] else "⏳ A receber"
+        conta_nome = receita["conta_nome"] if receita["conta_nome"] else "Sem conta"
+
+        with st.container(border=True):
+            st.markdown(f"### {receita['descricao']}")
+            st.write(f"**Categoria:** {receita['categoria']}")
+            st.write(f"**Conta:** {conta_nome}")
+            st.write(f"**Valor:** {fmt_moeda(receita['valor'])}")
+            st.write(f"**Status:** {status}")
+
+            if st.button("🗑️ Excluir receita", key=f"del_receita_{receita['id']}", use_container_width=True):
+                deletar_receita(usuario_id, receita["id"])
+                st.success("Receita excluída!")
+                st.rerun()
