@@ -1,3 +1,5 @@
+from utils.database import criar_tabelas
+
 import base64
 import hashlib
 import hmac
@@ -21,6 +23,8 @@ MESES = [
 CATEGORIAS = ["🏠 Moradia", "🍎 Alimentação", "🚗 Transporte", "🎡 Lazer", "💊 Saúde", "📚 Estudos", "🛠️ Outros"]
 
 st.set_page_config(page_title=f"{APP_NAME} 📈", layout="wide", page_icon="📈")
+
+criar_tabelas()
 
 # ------------------------- ESTILO -------------------------
 st.markdown(
