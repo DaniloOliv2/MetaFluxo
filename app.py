@@ -429,7 +429,7 @@ with aba4:
 
 with aba5:
 
-    tela_cartoes(user_id)
+    tela_cartoes(user_id, mes)
 
 with aba6:
 
