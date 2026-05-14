@@ -1,5 +1,5 @@
 import streamlit as st
-from utils.database import conectar
+from database.supabase_config import supabase
 
 
 def fmt_moeda(valor):
@@ -11,58 +11,44 @@ def fmt_moeda(valor):
 
 
 def criar_conta(usuario_id, nome, tipo, saldo):
-    conn = conectar()
-    cursor = conn.cursor()
 
-    cursor.execute("""
-        INSERT INTO contas (usuario_id, nome, tipo, saldo)
-        VALUES (?, ?, ?, ?)
-    """, (usuario_id, nome, tipo, float(saldo)))
-
-    conn.commit()
-    conn.close()
+    supabase.table("contas").insert({
+        "usuario_id": usuario_id,
+        "nome": nome,
+        "tipo": tipo,
+        "saldo": float(saldo)
+    }).execute()
 
 
 def listar_contas(usuario_id):
-    conn = conectar()
-    cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT * FROM contas
-        WHERE usuario_id = ?
-        ORDER BY id DESC
-    """, (usuario_id,))
+    response = supabase.table("contas") \
+        .select("*") \
+        .eq("usuario_id", usuario_id) \
+        .order("id", desc=True) \
+        .execute()
 
-    contas = cursor.fetchall()
-    conn.close()
-    return contas
+    return response.data
 
 
 def atualizar_conta(conta_id, nome, tipo, saldo):
-    conn = conectar()
-    cursor = conn.cursor()
 
-    cursor.execute("""
-        UPDATE contas
-        SET nome = ?, tipo = ?, saldo = ?
-        WHERE id = ?
-    """, (nome, tipo, float(saldo), conta_id))
-
-    conn.commit()
-    conn.close()
+    supabase.table("contas") \
+        .update({
+            "nome": nome,
+            "tipo": tipo,
+            "saldo": float(saldo)
+        }) \
+        .eq("id", conta_id) \
+        .execute()
 
 
 def deletar_conta(conta_id):
-    conn = conectar()
-    cursor = conn.cursor()
 
-    cursor.execute("""
-        DELETE FROM contas
-        WHERE id = ?
-    """, (conta_id,))
-
-    conn.commit()
-    conn.close()
+    supabase.table("contas") \
+        .delete() \
+        .eq("id", conta_id) \
+        .execute()
 
 
 def tela_contas(usuario_id):
