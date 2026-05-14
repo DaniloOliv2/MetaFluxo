@@ -1,3 +1,4 @@
+from modules.teste_supabase import testar_supabase
 from modules.recorrencias import tela_recorrencias
 from modules.dashboard import tela_dashboard_profissional
 from modules.faturas import tela_faturas
@@ -502,3 +503,5 @@ with aba10:
     if not sonhos_export.empty:
         st.download_button("Baixar sonhos CSV", sonhos_export.to_csv(index=False).encode("utf-8"), file_name="sonhos.csv", mime="text/csv", use_container_width=True)
     st.warning("No Streamlit Cloud, SQLite melhora a organização, mas o armazenamento ainda pode ser perdido em reinicializações. Para produção definitiva, o próximo passo é Supabase/Firebase/PostgreSQL.")
+    st.divider()
+testar_supabase()
