@@ -1,3 +1,4 @@
+from modules.dashboard import tela_dashboard_profissional
 from modules.faturas import tela_faturas
 from modules.contas import tela_contas
 from modules.receitas import tela_receitas
@@ -438,30 +439,13 @@ with aba6:
 
 with aba7:
 
-    valores = pd.DataFrame({
-        "Legenda": ["Pago", "Pendente", "Investido", "Sonhos", "Saldo livre"],
-        "Valor": [total_pago, total_pendente, float(investido), total_sonhos, max(0, saldo_livre)]
-    })
-    valores = valores[valores["Valor"] > 0]
-    gdf = pd.DataFrame([dict(g) for g in gastos])
-    col_a, col_b = st.columns(2)
-    with col_a:
-        st.subheader("Distribuição geral")
-        if valores.empty:
-            st.info("Sem dados para gerar gráfico.")
-        else:
-            fig = px.pie(valores, values="Valor", names="Legenda", hole=0.55)
-            fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="white", margin=dict(t=10,b=10,l=10,r=10))
-            st.plotly_chart(fig, use_container_width=True)
-    with col_b:
-        st.subheader("Gastos por categoria")
-        if gdf.empty:
-            st.info("Sem gastos cadastrados.")
-        else:
-            cat = gdf.groupby("categoria", as_index=False)["valor"].sum()
-            fig2 = px.bar(cat, x="categoria", y="valor", text_auto=".2s")
-            fig2.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="white", xaxis_title="", yaxis_title="Valor")
-            st.plotly_chart(fig2, use_container_width=True)
+    tela_dashboard_profissional(
+        user_id,
+        mes,
+        renda_manual=renda,
+        investido=investido,
+        privacidade=privacidade
+    )
 
 with aba8:
     s1, s2 = st.columns([1, 2])
