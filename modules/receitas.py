@@ -1,5 +1,6 @@
 import streamlit as st
 from utils.database import conectar
+from database.supabase_config import supabase
 
 
 def fmt_moeda(valor):
@@ -32,87 +33,88 @@ def garantir_tabela_receitas():
 
 
 def listar_contas(usuario_id):
-    conn = conectar()
-    cursor = conn.cursor()
+    response = supabase.table("contas") \
+        .select("*") \
+        .eq("usuario_id", usuario_id) \
+        .order("nome") \
+        .execute()
 
-    cursor.execute("""
-        SELECT id, nome, tipo, saldo
-        FROM contas
-        WHERE usuario_id = ?
-        ORDER BY nome ASC
-    """, (usuario_id,))
-
-    contas = cursor.fetchall()
-    conn.close()
-    return contas
+    return response.data
 
 
-def criar_receita(usuario_id, mes, descricao, categoria, conta_id, valor, recebida):
-    conn = conectar()
-    cursor = conn.cursor()
+def criar_receita(usuario_id, mes, descricao, categoria, conta_id, valor, recebida=True):
 
-    cursor.execute("""
-        INSERT INTO receitas (usuario_id, mes, descricao, categoria, conta_id, valor, recebida)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (usuario_id, mes, descricao, categoria, conta_id, float(valor), int(recebida)))
+    supabase.table("receitas").insert({
+        "usuario_id": usuario_id,
+        "mes": mes,
+        "descricao": descricao,
+        "categoria": categoria,
+        "conta_id": conta_id,
+        "valor": float(valor),
+        "recebida": recebida
+    }).execute()
 
     if recebida and conta_id:
-        cursor.execute("""
-            UPDATE contas
-            SET saldo = saldo + ?
-            WHERE id = ? AND usuario_id = ?
-        """, (float(valor), conta_id, usuario_id))
 
-    conn.commit()
-    conn.close()
+        conta = supabase.table("contas") \
+            .select("saldo") \
+            .eq("id", conta_id) \
+            .single() \
+            .execute()
+
+        saldo_atual = float(conta.data["saldo"])
+
+        supabase.table("contas").update({
+            "saldo": saldo_atual + float(valor)
+        }).eq("id", conta_id).execute()
 
 
 def listar_receitas(usuario_id, mes):
-    conn = conectar()
-    cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT receitas.*, contas.nome AS conta_nome
-        FROM receitas
-        LEFT JOIN contas ON contas.id = receitas.conta_id
-        WHERE receitas.usuario_id = ? AND receitas.mes = ?
-        ORDER BY receitas.id DESC
-    """, (usuario_id, mes))
+    response = supabase.table("receitas") \
+        .select("*") \
+        .eq("usuario_id", usuario_id) \
+        .eq("mes", mes) \
+        .order("id", desc=True) \
+        .execute()
 
-    receitas = cursor.fetchall()
-    conn.close()
-    return receitas
+    return response.data
 
 
 def deletar_receita(usuario_id, receita_id):
-    conn = conectar()
-    cursor = conn.cursor()
 
-    receita = cursor.execute("""
-        SELECT *
-        FROM receitas
-        WHERE id = ? AND usuario_id = ?
-    """, (receita_id, usuario_id)).fetchone()
+    receita = supabase.table("receitas") \
+        .select("*") \
+        .eq("id", receita_id) \
+        .eq("usuario_id", usuario_id) \
+        .single() \
+        .execute()
 
-    if receita and receita["recebida"] and receita["conta_id"]:
-        cursor.execute("""
-            UPDATE contas
-            SET saldo = saldo - ?
-            WHERE id = ? AND usuario_id = ?
-        """, (float(receita["valor"]), receita["conta_id"], usuario_id))
+    receita_data = receita.data
 
-    cursor.execute("""
-        DELETE FROM receitas
-        WHERE id = ? AND usuario_id = ?
-    """, (receita_id, usuario_id))
+    if receita_data and receita_data["recebida"] and receita_data["conta_id"]:
 
-    conn.commit()
-    conn.close()
+        conta = supabase.table("contas") \
+            .select("saldo") \
+            .eq("id", receita_data["conta_id"]) \
+            .single() \
+            .execute()
+
+        saldo_atual = float(conta.data["saldo"])
+
+        supabase.table("contas").update({
+            "saldo": saldo_atual - float(receita_data["valor"])
+        }).eq("id", receita_data["conta_id"]).execute()
+
+    supabase.table("receitas") \
+        .delete() \
+        .eq("id", receita_id) \
+        .execute()
 
 
 def tela_receitas(usuario_id, mes):
     garantir_tabela_receitas()
-
+# garantir_tabela_receitas()
     st.subheader("💵 Receitas")
 
     categorias = [
