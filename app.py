@@ -1,3 +1,4 @@
+from modules.faturas import tela_faturas
 from modules.contas import tela_contas
 from modules.receitas import tela_receitas
 from modules.despesas import tela_despesas
@@ -383,12 +384,13 @@ st.progress(progresso_inv)
 st.caption(f"Faltam {fmt(max(0, float(meta_inv) - float(investido)), privacidade)} para bater a meta do mês.")
 st.divider()
 
-aba1, aba2, aba3, aba4, aba5, aba6, aba7, aba8 = st.tabs([
+aba1, aba2, aba3, aba4, aba5, aba6, aba7, aba8, aba9 = st.tabs([
     "📝 Lançamentos",
     "🏦 Contas",
     "💵 Receitas",
     "💳 Despesas",
     "💳 Cartões",
+    "🧾 Faturas",
     "📊 Análises",
     "🚀 Meus sonhos",
     "📤 Exportar"
@@ -432,6 +434,9 @@ with aba5:
     tela_cartoes(user_id, mes)
 
 with aba6:
+    tela_faturas(user_id, mes)
+
+with aba7:
 
     valores = pd.DataFrame({
         "Legenda": ["Pago", "Pendente", "Investido", "Sonhos", "Saldo livre"],
@@ -458,7 +463,7 @@ with aba6:
             fig2.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="white", xaxis_title="", yaxis_title="Valor")
             st.plotly_chart(fig2, use_container_width=True)
 
-with aba7:
+with aba8:
     s1, s2 = st.columns([1, 2])
     with s1:
         with st.form("novo_sonho"):
@@ -488,7 +493,7 @@ with aba7:
                     deletar_sonho(sonho["id"])
                     st.rerun()
 
-with aba8:
+with aba9:
     st.subheader("Exportação")
     gastos_export = pd.DataFrame([dict(g) for g in listar_gastos(user_id, mes)])
     sonhos_export = pd.DataFrame([dict(s) for s in listar_sonhos(user_id)])
