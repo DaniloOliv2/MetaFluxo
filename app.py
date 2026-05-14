@@ -345,10 +345,10 @@ user_id = st.session_state.current_user_id
 usuario = st.session_state.current_user
 
 with st.sidebar:
-    if Path(LOGO_FILE).exists():
-        st.image(LOGO_FILE, use_container_width=True)
-    else:
-        st.title(f"📈 {APP_NAME}")
+    try:
+    st.image(LOGO_FILE, use_container_width=True)
+except:
+    st.title(f"📈 {APP_NAME}")
     st.caption(f"Usuário: **{usuario}**")
     st.divider()
     privacidade = st.toggle("👁️ Modo privacidade", value=False)
