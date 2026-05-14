@@ -1,3 +1,4 @@
+from modules.recorrencias import tela_recorrencias
 from modules.dashboard import tela_dashboard_profissional
 from modules.faturas import tela_faturas
 from modules.contas import tela_contas
@@ -385,11 +386,12 @@ st.progress(progresso_inv)
 st.caption(f"Faltam {fmt(max(0, float(meta_inv) - float(investido)), privacidade)} para bater a meta do mês.")
 st.divider()
 
-aba1, aba2, aba3, aba4, aba5, aba6, aba7, aba8, aba9 = st.tabs([
+aba1, aba2, aba3, aba4, aba5, aba6, aba7, aba8, aba9, aba10 = st.tabs([
     "📝 Lançamentos",
     "🏦 Contas",
     "💵 Receitas",
     "💳 Despesas",
+    "📅 Recorrências",
     "💳 Cartões",
     "🧾 Faturas",
     "📊 Análises",
@@ -431,13 +433,16 @@ with aba4:
     tela_despesas(user_id, mes)
 
 with aba5:
+    tela_recorrencias(user_id, mes)
+
+with aba6:
 
     tela_cartoes(user_id, mes)
 
-with aba6:
+with aba7:
     tela_faturas(user_id, mes)
 
-with aba7:
+with aba8:
 
     tela_dashboard_profissional(
         user_id,
@@ -447,7 +452,7 @@ with aba7:
         privacidade=privacidade
     )
 
-with aba8:
+with aba9:
     s1, s2 = st.columns([1, 2])
     with s1:
         with st.form("novo_sonho"):
@@ -477,7 +482,7 @@ with aba8:
                     deletar_sonho(sonho["id"])
                     st.rerun()
 
-with aba9:
+with aba10:
     st.subheader("Exportação")
     gastos_export = pd.DataFrame([dict(g) for g in listar_gastos(user_id, mes)])
     sonhos_export = pd.DataFrame([dict(s) for s in listar_sonhos(user_id)])
