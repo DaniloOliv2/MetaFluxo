@@ -44,11 +44,15 @@ def atualizar_conta(conta_id, nome, tipo, saldo):
 
 
 def deletar_conta(conta_id):
+    try:
+        supabase.table("contas").delete().eq("id", conta_id).execute()
+        st.success("✅ Conta excluída com sucesso!")
 
-    supabase.table("contas") \
-        .delete() \
-        .eq("id", conta_id) \
-        .execute()
+    except Exception:
+        st.error(
+            "❌ Esta conta está vinculada a cartões, receitas ou despesas.\n\n"
+            "Exclua os vínculos primeiro."
+        )
 
 
 def tela_contas(usuario_id):
