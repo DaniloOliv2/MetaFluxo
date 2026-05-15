@@ -442,7 +442,7 @@ with aba6:
     tela_cartoes(user_id, mes)
 
 with aba7:
-    tela_faturas(user_id, mes)
+    st.info("Módulo de faturas será atualizado para Supabase no próximo passo.")
 
 with aba8:
 
