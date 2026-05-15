@@ -1,5 +1,5 @@
 import streamlit as st
-from utils.database import conectar
+from database.supabase_config import supabase
 
 
 def fmt_moeda(valor):
@@ -9,163 +9,96 @@ def fmt_moeda(valor):
         return "R$ 0,00"
 
 
-def garantir_tabelas_cartoes():
-    conn = conectar()
-    cursor = conn.cursor()
-
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS cartoes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario_id INTEGER NOT NULL,
-            nome TEXT NOT NULL,
-            bandeira TEXT NOT NULL,
-            limite REAL NOT NULL DEFAULT 0,
-            conta_id INTEGER,
-            fechamento INTEGER NOT NULL DEFAULT 1,
-            vencimento INTEGER NOT NULL DEFAULT 10,
-            ativo INTEGER NOT NULL DEFAULT 1,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS compras_cartao (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario_id INTEGER NOT NULL,
-            cartao_id INTEGER NOT NULL,
-            mes TEXT NOT NULL,
-            descricao TEXT NOT NULL,
-            categoria TEXT NOT NULL,
-            valor_total REAL NOT NULL DEFAULT 0,
-            parcelas INTEGER NOT NULL DEFAULT 1,
-            paga INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-
-    conn.commit()
-    conn.close()
-
-
 def listar_contas(usuario_id):
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT id, nome, tipo, saldo FROM contas WHERE usuario_id = ? ORDER BY nome ASC",
-        (usuario_id,)
-    )
-    dados = cursor.fetchall()
-    conn.close()
-    return dados
+    resposta = supabase.table("contas").select("*").eq("usuario_id", usuario_id).order("nome").execute()
+    return resposta.data
 
 
 def criar_cartao(usuario_id, nome, bandeira, limite, conta_id, fechamento, vencimento):
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO cartoes (usuario_id, nome, bandeira, limite, conta_id, fechamento, vencimento)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', (usuario_id, nome, bandeira, float(limite), conta_id, int(fechamento), int(vencimento)))
-    conn.commit()
-    conn.close()
+    supabase.table("cartoes").insert({
+        "usuario_id": usuario_id,
+        "nome": nome,
+        "bandeira": bandeira,
+        "limite": float(limite),
+        "conta_id": conta_id,
+        "fechamento": int(fechamento),
+        "vencimento": int(vencimento),
+        "ativo": True
+    }).execute()
 
 
 def listar_cartoes(usuario_id):
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT cartoes.*, contas.nome AS conta_nome
-        FROM cartoes
-        LEFT JOIN contas ON contas.id = cartoes.conta_id
-        WHERE cartoes.usuario_id = ? AND cartoes.ativo = 1
-        ORDER BY cartoes.id DESC
-    ''', (usuario_id,))
-    dados = cursor.fetchall()
-    conn.close()
-    return dados
+    resposta = supabase.table("cartoes").select("*, contas(nome)").eq("usuario_id", usuario_id).eq("ativo", True).order("id", desc=True).execute()
+    cartoes = resposta.data
+
+    for cartao in cartoes:
+        if cartao.get("contas"):
+            cartao["conta_nome"] = cartao["contas"]["nome"]
+        else:
+            cartao["conta_nome"] = "Não vinculada"
+
+    return cartoes
 
 
 def atualizar_cartao(usuario_id, cartao_id, nome, bandeira, limite, conta_id, fechamento, vencimento):
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute('''
-        UPDATE cartoes
-        SET nome=?, bandeira=?, limite=?, conta_id=?, fechamento=?, vencimento=?
-        WHERE id=? AND usuario_id=?
-    ''', (nome, bandeira, float(limite), conta_id, int(fechamento), int(vencimento), cartao_id, usuario_id))
-    conn.commit()
-    conn.close()
+    supabase.table("cartoes").update({
+        "nome": nome,
+        "bandeira": bandeira,
+        "limite": float(limite),
+        "conta_id": conta_id,
+        "fechamento": int(fechamento),
+        "vencimento": int(vencimento)
+    }).eq("id", cartao_id).eq("usuario_id", usuario_id).execute()
 
 
 def deletar_cartao(usuario_id, cartao_id):
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE cartoes SET ativo = 0 WHERE id = ? AND usuario_id = ?", (cartao_id, usuario_id))
-    conn.commit()
-    conn.close()
+    supabase.table("cartoes").update({
+        "ativo": False
+    }).eq("id", cartao_id).eq("usuario_id", usuario_id).execute()
 
 
 def criar_compra(usuario_id, cartao_id, mes, descricao, categoria, valor_total, parcelas):
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO compras_cartao (usuario_id, cartao_id, mes, descricao, categoria, valor_total, parcelas)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', (usuario_id, cartao_id, mes, descricao, categoria, float(valor_total), int(parcelas)))
-    conn.commit()
-    conn.close()
+    supabase.table("compras_cartao").insert({
+        "usuario_id": usuario_id,
+        "cartao_id": cartao_id,
+        "mes": mes,
+        "descricao": descricao,
+        "categoria": categoria,
+        "valor_total": float(valor_total),
+        "parcelas": int(parcelas),
+        "paga": False
+    }).execute()
 
 
 def listar_compras_cartao(usuario_id, cartao_id):
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT * FROM compras_cartao
-        WHERE usuario_id = ? AND cartao_id = ?
-        ORDER BY id DESC
-    ''', (usuario_id, cartao_id))
-    dados = cursor.fetchall()
-    conn.close()
-    return dados
+    resposta = supabase.table("compras_cartao").select("*").eq("usuario_id", usuario_id).eq("cartao_id", cartao_id).order("id", desc=True).execute()
+    return resposta.data
 
 
 def listar_compras_mes(usuario_id, mes):
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT compras_cartao.*, cartoes.nome AS cartao_nome
-        FROM compras_cartao
-        LEFT JOIN cartoes ON cartoes.id = compras_cartao.cartao_id
-        WHERE compras_cartao.usuario_id = ? AND compras_cartao.mes = ?
-        ORDER BY compras_cartao.id DESC
-    ''', (usuario_id, mes))
-    dados = cursor.fetchall()
-    conn.close()
-    return dados
+    resposta = supabase.table("compras_cartao").select("*, cartoes(nome)").eq("usuario_id", usuario_id).eq("mes", mes).order("id", desc=True).execute()
+    compras = resposta.data
+
+    for compra in compras:
+        if compra.get("cartoes"):
+            compra["cartao_nome"] = compra["cartoes"]["nome"]
+        else:
+            compra["cartao_nome"] = "Sem cartão"
+
+    return compras
 
 
 def deletar_compra(usuario_id, compra_id):
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM compras_cartao WHERE id = ? AND usuario_id = ?", (compra_id, usuario_id))
-    conn.commit()
-    conn.close()
+    supabase.table("compras_cartao").delete().eq("id", compra_id).eq("usuario_id", usuario_id).execute()
 
 
 def total_usado_cartao(usuario_id, cartao_id):
-    conn = conectar()
-    cursor = conn.cursor()
-    total = cursor.execute('''
-        SELECT COALESCE(SUM(valor_total), 0) AS total
-        FROM compras_cartao
-        WHERE usuario_id = ? AND cartao_id = ?
-    ''', (usuario_id, cartao_id)).fetchone()["total"]
-    conn.close()
-    return float(total or 0)
+    resposta = supabase.table("compras_cartao").select("valor_total").eq("usuario_id", usuario_id).eq("cartao_id", cartao_id).execute()
+    total = sum(float(item["valor_total"]) for item in resposta.data)
+    return total
 
 
 def tela_cartoes(usuario_id, mes):
-    garantir_tabelas_cartoes()
     st.subheader("💳 Cartões de Crédito")
 
     bandeiras = ["Mastercard", "Visa", "Elo", "American Express", "Hipercard", "Outro"]
@@ -184,6 +117,7 @@ def tela_cartoes(usuario_id, mes):
             bandeira = st.selectbox("Bandeira", bandeiras)
             limite = st.number_input("Limite total", min_value=0.0, step=100.0, format="%.2f")
             conta_nome = st.selectbox("Conta para pagamento da fatura", list(contas_opcoes.keys()))
+
             col1, col2 = st.columns(2)
             fechamento = col1.number_input("Dia de fechamento", min_value=1, max_value=31, value=1, step=1)
             vencimento = col2.number_input("Dia de vencimento", min_value=1, max_value=31, value=10, step=1)
@@ -236,7 +170,7 @@ def tela_cartoes(usuario_id, mes):
             with st.container(border=True):
                 st.markdown(f"### 💳 {cartao['nome']}")
                 st.write(f"**Bandeira:** {cartao['bandeira']}")
-                st.write(f"**Conta da fatura:** {cartao['conta_nome'] or 'Não vinculada'}")
+                st.write(f"**Conta da fatura:** {cartao.get('conta_nome', 'Não vinculada')}")
                 st.write(f"**Limite:** {fmt_moeda(limite)}")
                 st.write(f"**Usado:** {fmt_moeda(usado)}")
                 st.write(f"**Disponível:** {fmt_moeda(disponivel)}")
@@ -255,10 +189,12 @@ def tela_cartoes(usuario_id, mes):
                             st.write(f"Valor total: {fmt_moeda(compra['valor_total'])}")
                             st.write(f"Parcelas: {compra['parcelas']}x de {fmt_moeda(valor_parcela)}")
                             st.write(f"Mês: {compra['mes']}")
+
                             if st.button("Excluir compra", key=f"del_compra_{compra['id']}", use_container_width=True):
                                 deletar_compra(usuario_id, compra["id"])
                                 st.success("Compra excluída!")
                                 st.rerun()
+
                             st.divider()
 
                 with st.expander("✏️ Editar / Excluir cartão"):
@@ -279,6 +215,7 @@ def tela_cartoes(usuario_id, mes):
                     novo_vencimento = c2.number_input("Vencimento", min_value=1, max_value=31, value=int(cartao["vencimento"]), step=1, key=f"vencimento_cartao_{cartao['id']}")
 
                     b1, b2 = st.columns(2)
+
                     if b1.button("Salvar", key=f"salvar_cartao_{cartao['id']}", use_container_width=True):
                         atualizar_cartao(usuario_id, cartao["id"], novo_nome.strip(), nova_bandeira, novo_limite, contas_opcoes[nova_conta], novo_fechamento, novo_vencimento)
                         st.success("Cartão atualizado!")
@@ -291,6 +228,7 @@ def tela_cartoes(usuario_id, mes):
 
     st.divider()
     st.subheader(f"📄 Compras do mês: {mes}")
+
     compras_mes = listar_compras_mes(usuario_id, mes)
 
     if not compras_mes:
@@ -301,12 +239,14 @@ def tela_cartoes(usuario_id, mes):
 
         for compra in compras_mes:
             valor_parcela = float(compra["valor_total"]) / int(compra["parcelas"])
+
             with st.container(border=True):
                 st.markdown(f"### {compra['descricao']}")
-                st.write(f"**Cartão:** {compra['cartao_nome']}")
+                st.write(f"**Cartão:** {compra.get('cartao_nome', 'Sem cartão')}")
                 st.write(f"**Categoria:** {compra['categoria']}")
                 st.write(f"**Valor total:** {fmt_moeda(compra['valor_total'])}")
                 st.write(f"**Parcelas:** {compra['parcelas']}x de {fmt_moeda(valor_parcela)}")
+
                 if st.button("🗑️ Excluir", key=f"del_compra_mes_{compra['id']}", use_container_width=True):
                     deletar_compra(usuario_id, compra["id"])
                     st.success("Compra excluída!")
