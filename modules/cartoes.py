@@ -28,14 +28,22 @@ def criar_cartao(usuario_id, nome, bandeira, limite, conta_id, fechamento, venci
 
 
 def listar_cartoes(usuario_id):
-    resposta = supabase.table("cartoes").select("*, contas(nome)").eq("usuario_id", usuario_id).eq("ativo", True).order("id", desc=True).execute()
+    resposta = supabase.table("cartoes") \
+        .select("*") \
+        .eq("usuario_id", usuario_id) \
+        .eq("ativo", True) \
+        .order("id", desc=True) \
+        .execute()
+
     cartoes = resposta.data
 
     for cartao in cartoes:
-        if cartao.get("contas"):
-            cartao["conta_nome"] = cartao["contas"]["nome"]
-        else:
-            cartao["conta_nome"] = "Não vinculada"
+        conta = supabase.table("contas") \
+            .select("nome") \
+            .eq("id", cartao["conta_id"]) \
+            .execute()
+
+        cartao["conta_nome"] = conta.data[0]["nome"] if conta.data else "Não vinculada"
 
     return cartoes
 
@@ -76,14 +84,22 @@ def listar_compras_cartao(usuario_id, cartao_id):
 
 
 def listar_compras_mes(usuario_id, mes):
-    resposta = supabase.table("compras_cartao").select("*, cartoes(nome)").eq("usuario_id", usuario_id).eq("mes", mes).order("id", desc=True).execute()
+    resposta = supabase.table("compras_cartao") \
+        .select("*") \
+        .eq("usuario_id", usuario_id) \
+        .eq("mes", mes) \
+        .order("id", desc=True) \
+        .execute()
+
     compras = resposta.data
 
     for compra in compras:
-        if compra.get("cartoes"):
-            compra["cartao_nome"] = compra["cartoes"]["nome"]
-        else:
-            compra["cartao_nome"] = "Sem cartão"
+        cartao = supabase.table("cartoes") \
+            .select("nome") \
+            .eq("id", compra["cartao_id"]) \
+            .execute()
+
+        compra["cartao_nome"] = cartao.data[0]["nome"] if cartao.data else "Sem cartão"
 
     return compras
 
