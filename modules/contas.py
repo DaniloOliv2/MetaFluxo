@@ -162,7 +162,6 @@ def tela_contas(usuario_id):
                             st.success("Conta atualizada!")
                             st.rerun()
 
-                    if c2.button("Excluir", key=f"excluir_conta_{conta['id']}", use_container_width=True):
-                        deletar_conta(conta["id"])
-                        st.success("Conta excluída!")
-                        st.rerun()
+                   if c2.button("Excluir", key=f"excluir_conta_{conta['id']}", use_container_width=True):
+                       deletar_conta(conta["id"])
+                       st.rerun()
