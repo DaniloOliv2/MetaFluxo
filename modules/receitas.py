@@ -192,7 +192,17 @@ def tela_receitas(usuario_id, mes):
 
     for receita in receitas:
         status = "✅ Recebida" if receita["recebida"] else "⏳ A receber"
-        conta_nome = receita["conta_nome"] if receita["conta_nome"] else "Sem conta"
+        conta_nome = "Sem conta"
+
+if receita.get("conta_id"):
+    conta = supabase.table("contas") \
+        .select("nome") \
+        .eq("id", receita["conta_id"]) \
+        .single() \
+        .execute()
+
+    if conta.data:
+        conta_nome = conta.data["nome"]
 
         with st.container(border=True):
             st.markdown(f"### {receita['descricao']}")
