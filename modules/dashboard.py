@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from utils.database import conectar
+from database.supabase_config import supabase
 
 
 def fmt_moeda(valor):
@@ -11,75 +11,93 @@ def fmt_moeda(valor):
         return "R$ 0,00"
 
 
-def garantir_tabelas_dashboard():
-    conn = conectar()
-    cursor = conn.cursor()
+def buscar_resumo(usuario_id, mes):
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS receitas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario_id INTEGER NOT NULL,
-            mes TEXT NOT NULL,
-            descricao TEXT NOT NULL,
-            categoria TEXT NOT NULL,
-            conta_id INTEGER,
-            valor REAL NOT NULL DEFAULT 0,
-            recebida INTEGER NOT NULL DEFAULT 1,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
+    saldo_contas = supabase.table("contas") \
+        .select("saldo") \
+        .eq("usuario_id", usuario_id) \
+        .execute()
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS despesas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario_id INTEGER NOT NULL,
-            mes TEXT NOT NULL,
-            descricao TEXT NOT NULL,
-            categoria TEXT NOT NULL,
-            conta_id INTEGER,
-            valor REAL NOT NULL DEFAULT 0,
-            paga INTEGER NOT NULL DEFAULT 0,
-            vencimento TEXT,
-            recorrente INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
+    saldo_total = sum(float(c["saldo"]) for c in saldo_contas.data)
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS compras_cartao (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario_id INTEGER NOT NULL,
-            cartao_id INTEGER NOT NULL,
-            mes TEXT NOT NULL,
-            descricao TEXT NOT NULL,
-            categoria TEXT NOT NULL,
-            valor_total REAL NOT NULL DEFAULT 0,
-            parcelas INTEGER NOT NULL DEFAULT 1,
-            paga INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
+    receitas = supabase.table("receitas") \
+        .select("*") \
+        .eq("usuario_id", usuario_id) \
+        .eq("mes", mes) \
+        .execute()
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS faturas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario_id INTEGER NOT NULL,
-            cartao_id INTEGER NOT NULL,
-            mes TEXT NOT NULL,
-            valor REAL NOT NULL DEFAULT 0,
-            paga INTEGER NOT NULL DEFAULT 0,
-            data_pagamento TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(usuario_id, cartao_id, mes)
-        )
-    """)
+    despesas = supabase.table("despesas") \
+        .select("*") \
+        .eq("usuario_id", usuario_id) \
+        .eq("mes", mes) \
+        .execute()
 
-    conn.commit()
-    conn.close()
+    compras = supabase.table("compras_cartao") \
+        .select("*") \
+        .eq("usuario_id", usuario_id) \
+        .eq("mes", mes) \
+        .execute()
+
+    faturas = supabase.table("faturas") \
+        .select("*") \
+        .eq("usuario_id", usuario_id) \
+        .eq("mes", mes) \
+        .execute()
+
+    total_receitas = sum(
+        float(r["valor"])
+        for r in receitas.data
+        if r["recebida"]
+    )
+
+    receitas_a_receber = sum(
+        float(r["valor"])
+        for r in receitas.data
+        if not r["recebida"]
+    )
+
+    despesas_pagas = sum(
+        float(d["valor"])
+        for d in despesas.data
+        if d["paga"]
+    )
+
+    despesas_pendentes = sum(
+        float(d["valor"])
+        for d in despesas.data
+        if not d["paga"]
+    )
+
+    total_cartao = sum(
+        float(c["valor_total"])
+        for c in compras.data
+    )
+
+    faturas_pendentes = sum(
+        float(f["valor"])
+        for f in faturas.data
+        if not f["paga"]
+    )
+
+    faturas_pagas = sum(
+        float(f["valor"])
+        for f in faturas.data
+        if f["paga"]
+    )
+
+    return {
+        "saldo_contas": saldo_total,
+        "total_receitas": total_receitas,
+        "receitas_a_receber": receitas_a_receber,
+        "total_despesas_pagas": despesas_pagas,
+        "total_despesas_pendentes": despesas_pendentes,
+        "total_cartao_mes": total_cartao,
+        "faturas_pendentes": faturas_pendentes,
+        "faturas_pagas": faturas_pagas
+    }
 
 
 def buscar_resumo(usuario_id, mes):
-    garantir_tabelas_dashboard()
 
     conn = conectar()
     cursor = conn.cursor()
