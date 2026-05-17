@@ -97,31 +97,36 @@ def buscar_resumo(usuario_id, mes):
 
 
 def dados_categorias(usuario_id, mes):
-    conn = conectar()
 
-    despesas = pd.read_sql_query(
-        """
-        SELECT categoria, valor, 'Despesa' AS tipo
-        FROM despesas
-        WHERE usuario_id = ? AND mes = ?
-        """,
-        conn,
-        params=(usuario_id, mes)
-    )
+    despesas_resp = supabase.table("despesas") \
+        .select("categoria, valor") \
+        .eq("usuario_id", usuario_id) \
+        .eq("mes", mes) \
+        .execute()
 
-    compras = pd.read_sql_query(
-        """
-        SELECT categoria, valor_total AS valor, 'Cartão' AS tipo
-        FROM compras_cartao
-        WHERE usuario_id = ? AND mes = ?
-        """,
-        conn,
-        params=(usuario_id, mes)
-    )
+    compras_resp = supabase.table("compras_cartao") \
+        .select("categoria, valor_total") \
+        .eq("usuario_id", usuario_id) \
+        .eq("mes", mes) \
+        .execute()
 
-    conn.close()
+    dados = []
 
-    return pd.concat([despesas, compras], ignore_index=True)
+    for item in despesas_resp.data:
+        dados.append({
+            "categoria": item["categoria"],
+            "valor": float(item["valor"]),
+            "tipo": "Despesa"
+        })
+
+    for item in compras_resp.data:
+        dados.append({
+            "categoria": item["categoria"],
+            "valor": float(item["valor_total"]),
+            "tipo": "Cartão"
+        })
+
+    return pd.DataFrame(dados)
 
 
 def dados_fluxo(usuario_id, mes):
