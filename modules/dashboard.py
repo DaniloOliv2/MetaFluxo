@@ -26,24 +26,23 @@ def buscar_resumo(usuario_id, mes):
     .eq("mes", mes) \
     .execute()
 
-despesas = supabase.table("despesas") \
+    despesas = supabase.table("despesas") \
     .select("valor, paga") \
     .eq("usuario_id", usuario_id) \
     .eq("mes", mes) \
     .execute()
 
-compras = supabase.table("compras_cartao") \
+    compras = supabase.table("compras_cartao") \
     .select("valor_total") \
     .eq("usuario_id", usuario_id) \
     .eq("mes", mes) \
     .execute()
 
-faturas = supabase.table("faturas") \
+    faturas = supabase.table("faturas") \
     .select("valor, paga") \
     .eq("usuario_id", usuario_id) \
     .eq("mes", mes) \
     .execute()
-
     total_receitas = sum(
         float(r["valor"])
         for r in receitas.data
