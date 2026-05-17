@@ -21,28 +21,28 @@ def buscar_resumo(usuario_id, mes):
     saldo_total = sum(float(c["saldo"]) for c in saldo_contas.data)
 
     receitas = supabase.table("receitas") \
-        .select("*") \
-        .eq("usuario_id", usuario_id) \
-        .eq("mes", mes) \
-        .execute()
+    .select("valor, recebida") \
+    .eq("usuario_id", usuario_id) \
+    .eq("mes", mes) \
+    .execute()
 
-    despesas = supabase.table("despesas") \
-        .select("*") \
-        .eq("usuario_id", usuario_id) \
-        .eq("mes", mes) \
-        .execute()
+despesas = supabase.table("despesas") \
+    .select("valor, paga") \
+    .eq("usuario_id", usuario_id) \
+    .eq("mes", mes) \
+    .execute()
 
-    compras = supabase.table("compras_cartao") \
-        .select("*") \
-        .eq("usuario_id", usuario_id) \
-        .eq("mes", mes) \
-        .execute()
+compras = supabase.table("compras_cartao") \
+    .select("valor_total") \
+    .eq("usuario_id", usuario_id) \
+    .eq("mes", mes) \
+    .execute()
 
-    faturas = supabase.table("faturas") \
-        .select("*") \
-        .eq("usuario_id", usuario_id) \
-        .eq("mes", mes) \
-        .execute()
+faturas = supabase.table("faturas") \
+    .select("valor, paga") \
+    .eq("usuario_id", usuario_id) \
+    .eq("mes", mes) \
+    .execute()
 
     total_receitas = sum(
         float(r["valor"])
