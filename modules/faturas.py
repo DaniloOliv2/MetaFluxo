@@ -60,144 +60,141 @@ def buscar_fatura(usuario_id, cartao_id, mes):
 
 
 def gerar_ou_atualizar_fatura(usuario_id, cartao_id, mes, valor):
-    conn = conectar()
-    cursor = conn.cursor()
 
-    cursor.execute("""
-        INSERT INTO faturas (usuario_id, cartao_id, mes, valor, paga)
-        VALUES (?, ?, ?, ?, 0)
-        ON CONFLICT(usuario_id, cartao_id, mes)
-        DO UPDATE SET valor = excluded.valor
-        WHERE faturas.paga = 0
-    """, (usuario_id, cartao_id, mes, float(valor)))
+    fatura = buscar_fatura(usuario_id, cartao_id, mes)
 
-    conn.commit()
-    conn.close()
+    if fatura:
+
+        if not fatura["paga"]:
+
+            supabase.table("faturas") \
+                .update({
+                    "valor": float(valor)
+                }) \
+                .eq("id", fatura["id"]) \
+                .execute()
+
+    else:
+
+        supabase.table("faturas") \
+            .insert({
+                "usuario_id": usuario_id,
+                "cartao_id": cartao_id,
+                "mes": mes,
+                "valor": float(valor),
+                "paga": False
+            }) \
+            .execute()
 
 
 def pagar_fatura(usuario_id, cartao_id, mes):
-    conn = conectar()
-    cursor = conn.cursor()
 
-    fatura = cursor.execute("""
-        SELECT *
-        FROM faturas
-        WHERE usuario_id = ? AND cartao_id = ? AND mes = ?
-    """, (usuario_id, cartao_id, mes)).fetchone()
+    fatura = buscar_fatura(usuario_id, cartao_id, mes)
 
-    cartao = cursor.execute("""
-        SELECT *
-        FROM cartoes
-        WHERE id = ? AND usuario_id = ?
-    """, (cartao_id, usuario_id)).fetchone()
-
-    if not fatura or not cartao:
-        conn.close()
-        return False, "Fatura ou cartão não encontrado."
+    if not fatura:
+        return False, "Fatura não encontrada."
 
     if fatura["paga"]:
-        conn.close()
         return False, "Essa fatura já está paga."
 
-    conta_id = cartao["conta_id"]
+    response = supabase.table("cartoes") \
+        .select("*, contas(*)") \
+        .eq("id", cartao_id) \
+        .eq("usuario_id", usuario_id) \
+        .limit(1) \
+        .execute()
 
-    if not conta_id:
-        conn.close()
-        return False, "Cartão sem conta vinculada para pagamento."
+    if not response.data:
+        return False, "Cartão não encontrado."
 
-    conta = cursor.execute("""
-        SELECT *
-        FROM contas
-        WHERE id = ? AND usuario_id = ?
-    """, (conta_id, usuario_id)).fetchone()
+    cartao = response.data[0]
+
+    conta = cartao.get("contas")
 
     if not conta:
-        conn.close()
-        return False, "Conta vinculada não encontrada."
+        return False, "Cartão sem conta vinculada."
 
     valor = float(fatura["valor"])
     saldo = float(conta["saldo"])
 
     if saldo < valor:
-        conn.close()
-        return False, "Saldo insuficiente na conta vinculada."
+        return False, "Saldo insuficiente."
 
-    cursor.execute("""
-        UPDATE contas
-        SET saldo = saldo - ?
-        WHERE id = ? AND usuario_id = ?
-    """, (valor, conta_id, usuario_id))
+    novo_saldo = saldo - valor
 
-    cursor.execute("""
-        UPDATE faturas
-        SET paga = 1, data_pagamento = CURRENT_TIMESTAMP
-        WHERE id = ?
-    """, (fatura["id"],))
+    supabase.table("contas") \
+        .update({
+            "saldo": novo_saldo
+        }) \
+        .eq("id", conta["id"]) \
+        .execute()
 
-    conn.commit()
-    conn.close()
+    supabase.table("faturas") \
+        .update({
+            "paga": True
+        }) \
+        .eq("id", fatura["id"]) \
+        .execute()
 
     return True, "Fatura paga com sucesso!"
 
+   def reabrir_fatura(usuario_id, cartao_id, mes):
 
-def reabrir_fatura(usuario_id, cartao_id, mes):
-    conn = conectar()
-    cursor = conn.cursor()
+    fatura = buscar_fatura(usuario_id, cartao_id, mes)
 
-    fatura = cursor.execute("""
-        SELECT *
-        FROM faturas
-        WHERE usuario_id = ? AND cartao_id = ? AND mes = ?
-    """, (usuario_id, cartao_id, mes)).fetchone()
+    if not fatura or not fatura["paga"]:
+        return False, "Não foi possível reabrir."
 
-    cartao = cursor.execute("""
-        SELECT *
-        FROM cartoes
-        WHERE id = ? AND usuario_id = ?
-    """, (cartao_id, usuario_id)).fetchone()
+    response = supabase.table("cartoes") \
+        .select("*, contas(*)") \
+        .eq("id", cartao_id) \
+        .eq("usuario_id", usuario_id) \
+        .limit(1) \
+        .execute()
 
-    if not fatura or not cartao or not fatura["paga"]:
-        conn.close()
-        return False, "Não foi possível reabrir a fatura."
+    if not response.data:
+        return False, "Cartão não encontrado."
 
-    conta_id = cartao["conta_id"]
+    cartao = response.data[0]
 
-    cursor.execute("""
-        UPDATE contas
-        SET saldo = saldo + ?
-        WHERE id = ? AND usuario_id = ?
-    """, (float(fatura["valor"]), conta_id, usuario_id))
+    conta = cartao.get("contas")
 
-    cursor.execute("""
-        UPDATE faturas
-        SET paga = 0, data_pagamento = NULL
-        WHERE id = ?
-    """, (fatura["id"],))
+    if not conta:
+        return False, "Conta não encontrada."
 
-    conn.commit()
-    conn.close()
+    novo_saldo = float(conta["saldo"]) + float(fatura["valor"])
 
-    return True, "Fatura reaberta e valor devolvido para a conta."
+    supabase.table("contas") \
+        .update({
+            "saldo": novo_saldo
+        }) \
+        .eq("id", conta["id"]) \
+        .execute()
+
+    supabase.table("faturas") \
+        .update({
+            "paga": False
+        }) \
+        .eq("id", fatura["id"]) \
+        .execute()
+
+    return True, "Fatura reaberta!"
 
 
 def listar_compras_fatura(usuario_id, cartao_id, mes):
-    conn = conectar()
-    cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT *
-        FROM compras_cartao
-        WHERE usuario_id = ? AND cartao_id = ? AND mes = ?
-        ORDER BY id DESC
-    """, (usuario_id, cartao_id, mes))
+    response = supabase.table("compras_cartao") \
+        .select("*") \
+        .eq("usuario_id", usuario_id) \
+        .eq("cartao_id", cartao_id) \
+        .eq("mes", mes) \
+        .order("id", desc=True) \
+        .execute()
 
-    compras = cursor.fetchall()
-    conn.close()
-    return compras
+    return response.data
 
 
 def tela_faturas(usuario_id, mes):
-    garantir_tabela_faturas()
 
     st.subheader("🧾 Faturas do Cartão")
 
