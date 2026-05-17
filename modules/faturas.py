@@ -1,5 +1,5 @@
 import streamlit as st
-from utils.database import conectar
+from database.supabase_config import supabase
 
 
 def fmt_moeda(valor):
@@ -9,71 +9,54 @@ def fmt_moeda(valor):
         return "R$ 0,00"
 
 
-def garantir_tabela_faturas():
-    conn = conectar()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS faturas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario_id INTEGER NOT NULL,
-            cartao_id INTEGER NOT NULL,
-            mes TEXT NOT NULL,
-            valor REAL NOT NULL DEFAULT 0,
-            paga INTEGER NOT NULL DEFAULT 0,
-            data_pagamento TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(usuario_id, cartao_id, mes)
-        )
-    """)
-
-    conn.commit()
-    conn.close()
-
-
 def listar_cartoes(usuario_id):
-    conn = conectar()
-    cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT cartoes.*, contas.nome AS conta_nome, contas.saldo AS conta_saldo
-        FROM cartoes
-        LEFT JOIN contas ON contas.id = cartoes.conta_id
-        WHERE cartoes.usuario_id = ? AND cartoes.ativo = 1
-        ORDER BY cartoes.nome ASC
-    """, (usuario_id,))
+    response = supabase.table("cartoes") \
+        .select("*, contas(nome, saldo)") \
+        .eq("usuario_id", usuario_id) \
+        .eq("ativo", True) \
+        .order("nome") \
+        .execute()
 
-    cartoes = cursor.fetchall()
-    conn.close()
+    cartoes = response.data
+
+    for cartao in cartoes:
+        conta = cartao.get("contas")
+
+        cartao["conta_nome"] = conta["nome"] if conta else None
+        cartao["conta_saldo"] = conta["saldo"] if conta else 0
+
     return cartoes
 
 
 def total_compras_cartao_mes(usuario_id, cartao_id, mes):
-    conn = conectar()
-    cursor = conn.cursor()
 
-    total = cursor.execute("""
-        SELECT COALESCE(SUM(valor_total), 0) AS total
-        FROM compras_cartao
-        WHERE usuario_id = ? AND cartao_id = ? AND mes = ?
-    """, (usuario_id, cartao_id, mes)).fetchone()["total"]
+    response = supabase.table("compras_cartao") \
+        .select("valor_total") \
+        .eq("usuario_id", usuario_id) \
+        .eq("cartao_id", cartao_id) \
+        .eq("mes", mes) \
+        .execute()
 
-    conn.close()
-    return float(total or 0)
+    total = sum(float(item["valor_total"]) for item in response.data)
+
+    return total
 
 
 def buscar_fatura(usuario_id, cartao_id, mes):
-    conn = conectar()
-    cursor = conn.cursor()
 
-    fatura = cursor.execute("""
-        SELECT *
-        FROM faturas
-        WHERE usuario_id = ? AND cartao_id = ? AND mes = ?
-    """, (usuario_id, cartao_id, mes)).fetchone()
+    response = supabase.table("faturas") \
+        .select("*") \
+        .eq("usuario_id", usuario_id) \
+        .eq("cartao_id", cartao_id) \
+        .eq("mes", mes) \
+        .limit(1) \
+        .execute()
 
-    conn.close()
-    return fatura
+    if response.data:
+        return response.data[0]
+
+    return None
 
 
 def gerar_ou_atualizar_fatura(usuario_id, cartao_id, mes, valor):
