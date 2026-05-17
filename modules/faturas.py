@@ -142,8 +142,8 @@ def reabrir_fatura(usuario_id, cartao_id, mes):
 
     fatura = buscar_fatura(usuario_id, cartao_id, mes)
 
-   if not fatura or not fatura["paga"]:
-       return False, "Não foi possível reabrir."
+    if not fatura or not fatura["paga"]:
+        return False, "Não foi possível reabrir."
 
     response = supabase.table("cartoes") \
         .select("*, contas(*)") \
@@ -152,15 +152,15 @@ def reabrir_fatura(usuario_id, cartao_id, mes):
         .limit(1) \
         .execute()
 
-  if not response.data:
-       return False, "Cartão não encontrado."
+    if not response.data:
+        return False, "Cartão não encontrado."
 
     cartao = response.data[0]
 
     conta = cartao.get("contas")
 
-  if not conta:
-      return False, "Conta não encontrada."
+    if not conta:
+        return False, "Conta não encontrada."
 
     novo_saldo = float(conta["saldo"]) + float(fatura["valor"])
 
@@ -178,7 +178,7 @@ def reabrir_fatura(usuario_id, cartao_id, mes):
         .eq("id", fatura["id"]) \
         .execute()
 
-     return True, "Fatura reaberta!"
+    return True, "Fatura reaberta!"
 
 
 def listar_compras_fatura(usuario_id, cartao_id, mes):
