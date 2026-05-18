@@ -4,3 +4,5 @@ plotly
 pillow
 supabase
 openpyxl
+reportlab
+matplotlib
