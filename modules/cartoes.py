@@ -80,6 +80,17 @@ def calcular_mes_fatura(fechamento):
     return f"{hoje.year}-{str(hoje.month).zfill(2)}"
 
 
+def adicionar_meses(mes_base, incremento):
+    ano, mes = map(int, mes_base.split("-"))
+    mes += incremento
+
+    while mes > 12:
+        mes -= 12
+        ano += 1
+
+    return f"{ano}-{str(mes).zfill(2)}"
+
+
 def criar_compra(usuario_id, cartao_id, descricao, categoria, valor_total, parcelas):
 
     response = supabase.table("cartoes") \
@@ -89,19 +100,45 @@ def criar_compra(usuario_id, cartao_id, descricao, categoria, valor_total, parce
         .execute()
 
     fechamento = response.data[0]["fechamento"]
+    mes_inicial = calcular_mes_fatura(fechamento)
+    valor_parcela = float(valor_total) / int(parcelas)
 
-    mes_fatura = calcular_mes_fatura(fechamento)
-
-    supabase.table("compras_cartao").insert({
+    compra_pai = supabase.table("compras_cartao").insert({
         "usuario_id": usuario_id,
         "cartao_id": cartao_id,
-        "mes": mes_fatura,
+        "mes": mes_inicial,
         "descricao": descricao,
         "categoria": categoria,
         "valor_total": float(valor_total),
         "parcelas": int(parcelas),
+        "parcela_atual": 1,
+        "valor_parcela": valor_parcela,
         "paga": False
     }).execute()
+
+    compra_pai_id = compra_pai.data[0]["id"]
+
+    supabase.table("compras_cartao") \
+        .update({"compra_pai_id": compra_pai_id}) \
+        .eq("id", compra_pai_id) \
+        .execute()
+
+    for parcela in range(2, int(parcelas) + 1):
+        mes_parcela = adicionar_meses(mes_inicial, parcela - 1)
+
+        supabase.table("compras_cartao").insert({
+            "usuario_id": usuario_id,
+            "cartao_id": cartao_id,
+            "mes": mes_parcela,
+            "descricao": descricao,
+            "categoria": categoria,
+            "valor_total": valor_parcela,
+            "parcelas": int(parcelas),
+            "parcela_atual": parcela,
+            "valor_parcela": valor_parcela,
+            "compra_pai_id": compra_pai_id,
+            "paga": False
+        }).execute()
 
 
 def listar_compras_cartao(usuario_id, cartao_id):
