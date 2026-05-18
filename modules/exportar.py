@@ -131,6 +131,10 @@ def gerar_grafico(dados):
 
 def gerar_pdf(usuario_id, mes):
 
+    from reportlab.platypus import Image, PageBreak
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.styles import ParagraphStyle
+
     dados = buscar_dados(usuario_id, mes)
 
     buffer = BytesIO()
@@ -138,60 +142,106 @@ def gerar_pdf(usuario_id, mes):
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        rightMargin=30,
-        leftMargin=30,
-        topMargin=30,
-        bottomMargin=30
+        rightMargin=36,
+        leftMargin=36,
+        topMargin=36,
+        bottomMargin=36
     )
 
     styles = getSampleStyleSheet()
 
-    elementos = []
-
-    titulo = Paragraph(
-        f"<b>RELATÓRIO FINANCEIRO - {mes}</b>",
-        styles["Title"]
+    titulo_style = ParagraphStyle(
+        "TituloPremium",
+        parent=styles["Title"],
+        alignment=TA_CENTER,
+        fontSize=22,
+        textColor=colors.HexColor("#0f172a"),
+        spaceAfter=20
     )
 
-    elementos.append(titulo)
-    elementos.append(Spacer(1, 20))
+    subtitulo_style = ParagraphStyle(
+        "SubtituloPremium",
+        parent=styles["Normal"],
+        alignment=TA_CENTER,
+        fontSize=11,
+        textColor=colors.HexColor("#475569"),
+        spaceAfter=25
+    )
 
-    resumo = [
-        ["Indicador", "Valor"],
+    elementos = []
+
+    elementos.append(Paragraph("🚀 MetaFlux Pro", titulo_style))
+    elementos.append(Paragraph(f"Relatório Executivo Financeiro • {mes}", subtitulo_style))
+
+    saldo_cor = "#16a34a" if dados["saldo"] >= 0 else "#dc2626"
+    saldo_texto = "Positivo" if dados["saldo"] >= 0 else "Negativo"
+
+    cards = [
+        ["Receitas", f"R$ {dados['receitas']:,.2f}", "Despesas", f"R$ {dados['despesas']:,.2f}"],
+        ["Faturas", f"R$ {dados['faturas']:,.2f}", "Saldo Final", f"R$ {dados['saldo']:,.2f}"],
+    ]
+
+    tabela_cards = Table(cards, colWidths=[120, 120, 120, 120], rowHeights=42)
+
+    tabela_cards.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#0f172a")),
+        ("TEXTCOLOR", (0, 0), (-1, -1), colors.white),
+        ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 10),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#334155")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#334155")),
+    ]))
+
+    elementos.append(tabela_cards)
+    elementos.append(Spacer(1, 25))
+
+    resumo = Paragraph(
+        f"""
+        <b>Resumo inteligente:</b><br/>
+        No mês de <b>{mes}</b>, o saldo final ficou <font color="{saldo_cor}"><b>{saldo_texto}</b></font>.
+        Receitas totalizaram <b>R$ {dados['receitas']:,.2f}</b>, enquanto despesas e faturas somaram
+        <b>R$ {(dados['despesas'] + dados['faturas']):,.2f}</b>.
+        """,
+        styles["BodyText"]
+    )
+
+    elementos.append(resumo)
+    elementos.append(Spacer(1, 25))
+
+    grafico = gerar_grafico(dados)
+    elementos.append(Image(grafico, width=430, height=280))
+
+    elementos.append(Spacer(1, 25))
+
+    tabela_detalhe = [
+        ["Categoria", "Valor"],
         ["Receitas", f"R$ {dados['receitas']:,.2f}"],
         ["Despesas", f"R$ {dados['despesas']:,.2f}"],
         ["Faturas", f"R$ {dados['faturas']:,.2f}"],
-        ["Saldo Final", f"R$ {dados['saldo']:,.2f}"]
+        ["Saldo Final", f"R$ {dados['saldo']:,.2f}"],
     ]
 
-    tabela = Table(resumo, colWidths=[220, 220])
+    tabela = Table(tabela_detalhe, colWidths=[250, 200])
 
     tabela.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2563eb")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 11),
-        ("GRID", (0, 0), (-1, -1), 1, colors.grey),
-        ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#f8fafc"))
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
+        ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#f8fafc")),
+        ("FONTSIZE", (0, 0), (-1, -1), 10),
     ]))
 
     elementos.append(tabela)
-    elementos.append(Spacer(1, 30))
 
-    grafico = gerar_grafico(dados)
+    elementos.append(Spacer(1, 35))
 
-    from reportlab.platypus import Image
-
-    elementos.append(Image(grafico, width=420, height=280))
-
-    elementos.append(Spacer(1, 30))
-
-    rodape = Paragraph(
-        "MetaFlux Pro • Relatório Financeiro Premium",
+    elementos.append(Paragraph(
+        "MetaFlux Pro • Relatório Financeiro Executivo Premium",
         styles["Italic"]
-    )
-
-    elementos.append(rodape)
+    ))
 
     doc.build(elementos)
 
