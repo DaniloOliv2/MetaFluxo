@@ -12,6 +12,7 @@ from utils.database import criar_tabelas
 import base64
 import hashlib
 import hmac
+from modules.exportar import tela_exportar
 import os
 import sqlite3
 import time
@@ -443,7 +444,7 @@ with aba6:
     tela_cartoes(user_id, mes)
 
 with aba7:
-    st.info("Módulo de faturas será atualizado para Supabase no próximo passo.")
+    tela_faturas(user_id, mes)
 
 with aba8:
 
@@ -486,24 +487,6 @@ with aba9:
                     st.rerun()
 
 with aba10:
-    st.subheader("Exportação")
-    gastos_export = pd.DataFrame([dict(g) for g in listar_gastos(user_id, mes)])
-    sonhos_export = pd.DataFrame([dict(s) for s in listar_sonhos(user_id)])
-    resumo = pd.DataFrame([{
-        "mes": mes,
-        "renda": renda,
-        "total_pago": total_pago,
-        "total_pendente": total_pendente,
-        "investido": investido,
-        "total_sonhos": total_sonhos,
-        "saldo_livre": saldo_livre,
-    }])
-    csv = resumo.to_csv(index=False).encode("utf-8")
-    st.download_button("Baixar resumo CSV", csv, file_name=f"resumo_{mes.lower()}.csv", mime="text/csv", use_container_width=True)
-    if not gastos_export.empty:
-        st.download_button("Baixar gastos CSV", gastos_export.to_csv(index=False).encode("utf-8"), file_name=f"gastos_{mes.lower()}.csv", mime="text/csv", use_container_width=True)
-    if not sonhos_export.empty:
-        st.download_button("Baixar sonhos CSV", sonhos_export.to_csv(index=False).encode("utf-8"), file_name="sonhos.csv", mime="text/csv", use_container_width=True)
-    st.warning("No Streamlit Cloud, SQLite melhora a organização, mas o armazenamento ainda pode ser perdido em reinicializações. Para produção definitiva, o próximo passo é Supabase/Firebase/PostgreSQL.")
-    st.divider()
+    tela_exportar(user_id, mes)
+
 testar_supabase()
