@@ -1,3 +1,4 @@
+from modules.exportar import tela_exportar
 from modules.teste_supabase import testar_supabase
 from modules.recorrencias import tela_recorrencias
 from modules.dashboard import tela_dashboard_profissional
