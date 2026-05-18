@@ -1,4 +1,5 @@
 import streamlit as st
+from datetime import datetime
 from database.supabase_config import supabase
 
 
@@ -65,11 +66,36 @@ def deletar_cartao(usuario_id, cartao_id):
     }).eq("id", cartao_id).eq("usuario_id", usuario_id).execute()
 
 
-def criar_compra(usuario_id, cartao_id, mes, descricao, categoria, valor_total, parcelas):
+def calcular_mes_fatura(fechamento):
+
+    hoje = datetime.now()
+
+    if hoje.day > int(fechamento):
+
+        if hoje.month == 12:
+            return f"{hoje.year + 1}-01"
+
+        return f"{hoje.year}-{str(hoje.month + 1).zfill(2)}"
+
+    return f"{hoje.year}-{str(hoje.month).zfill(2)}"
+
+
+def criar_compra(usuario_id, cartao_id, descricao, categoria, valor_total, parcelas):
+
+    response = supabase.table("cartoes") \
+        .select("fechamento") \
+        .eq("id", cartao_id) \
+        .limit(1) \
+        .execute()
+
+    fechamento = response.data[0]["fechamento"]
+
+    mes_fatura = calcular_mes_fatura(fechamento)
+
     supabase.table("compras_cartao").insert({
         "usuario_id": usuario_id,
         "cartao_id": cartao_id,
-        "mes": mes,
+        "mes": mes_fatura,
         "descricao": descricao,
         "categoria": categoria,
         "valor_total": float(valor_total),
@@ -169,7 +195,16 @@ def tela_cartoes(usuario_id, mes):
                 elif valor_total <= 0:
                     st.warning("Informe um valor maior que zero.")
                 else:
-                    criar_compra(usuario_id, cartoes_opcoes[cartao_nome], mes, descricao.strip(), categoria, valor_total, parcelas)
+                                
+                    criar_compra(
+                        usuario_id,
+                        cartoes_opcoes[cartao_nome],
+                        descricao.strip(),
+                        categoria,
+                        valor_total,
+                        parcelas
+                    )
+
                     st.success("Compra cadastrada com sucesso!")
                     st.rerun()
 
