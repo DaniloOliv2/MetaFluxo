@@ -230,7 +230,7 @@ def tela_faturas(usuario_id, mes):
                 if not compras:
                     st.info("Nenhuma compra nesse cartão neste mês.")
                 else:
-                                        for compra in compras:
+                    for compra in compras:
                         parcelas = int(compra["parcelas"])
                         valor_parcela = float(compra["valor_parcela"])
 
