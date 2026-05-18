@@ -102,7 +102,7 @@ def buscar_dados(usuario_id, mes):
 
 def gerar_grafico(dados):
 
-    fig, ax = plt.subplots(figsize=(6, 4))
+    fig, ax = plt.subplots(figsize=(7, 4))
 
     categorias = [
         "Receitas",
@@ -116,13 +116,37 @@ def gerar_grafico(dados):
         dados["faturas"]
     ]
 
-    ax.bar(categorias, valores)
+    cores = [
+        "#22c55e",
+        "#ef4444",
+        "#3b82f6"
+    ]
 
-    ax.set_title("Resumo Financeiro")
+    ax.pie(
+        valores,
+        labels=categorias,
+        autopct="%1.1f%%",
+        startangle=90,
+        colors=cores,
+        wedgeprops={"width": 0.45}
+    )
+
+    ax.set_title(
+        "Distribuição Financeira",
+        fontsize=16,
+        fontweight="bold"
+    )
+
+    plt.tight_layout()
 
     img = BytesIO()
 
-    plt.savefig(img, format="png", bbox_inches="tight")
+    plt.savefig(
+        img,
+        format="png",
+        bbox_inches="tight",
+        transparent=True
+    )
 
     img.seek(0)
 
