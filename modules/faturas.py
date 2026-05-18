@@ -32,7 +32,7 @@ def listar_cartoes(usuario_id):
 def total_compras_cartao_mes(usuario_id, cartao_id, mes):
 
     response = supabase.table("compras_cartao") \
-        .select("valor_parcela")
+        .select("valor_parcela") \
         .eq("usuario_id", usuario_id) \
         .eq("cartao_id", cartao_id) \
         .eq("mes", mes) \
@@ -230,16 +230,17 @@ def tela_faturas(usuario_id, mes):
                 if not compras:
                     st.info("Nenhuma compra nesse cartão neste mês.")
                 else:
-                    for compra in compras:
+                                        for compra in compras:
                         parcelas = int(compra["parcelas"])
-                       valor_parcela = float(compra["valor_parcela"])
+                        valor_parcela = float(compra["valor_parcela"])
+
                         st.markdown(f"**{compra['descricao']}**")
                         st.write(f"Categoria: {compra['categoria']}")
                         st.write(f"Valor total: {fmt_moeda(compra['valor_total'])}")
-                       st.write(
-                           f"Parcela: {compra['parcela_atual']}/{parcelas} "
-                           f"• {fmt_moeda(valor_parcela)}"
-                       )
+                        st.write(
+                            f"Parcela: {compra['parcela_atual']}/{parcelas} "
+                            f"• {fmt_moeda(valor_parcela)}"
+                        )
                         st.divider()
 
             col1, col2 = st.columns(2)
