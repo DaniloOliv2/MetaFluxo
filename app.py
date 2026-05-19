@@ -488,9 +488,9 @@ with aba9:
                     deletar_sonho(sonho["id"])
                     st.rerun()
     with aba10:
-    tela_investimentos(user_id)
+        tela_investimentos(user_id)
 
     with aba11:
-    tela_exportar(user_id, mes)
+        tela_exportar(user_id, mes)
 
 testar_supabase()
