@@ -401,7 +401,7 @@ aba1, aba2, aba3, aba4, aba5, aba6, aba7, aba8, aba9, aba10, aba11 = st.tabs([
     "🧾 Faturas",
     "📊 Análises",
     "🚀 Meus sonhos",
-    "💹 Investimentos"
+    "💹 Investimentos",
     "📤 Exportar"
 ])
 
@@ -488,9 +488,9 @@ with aba9:
                     deletar_sonho(sonho["id"])
                     st.rerun()
     with aba10:
-        tela_investimentos(user_id)
+    tela_investimentos(user_id)
 
-with aba11:
+    with aba11:
     tela_exportar(user_id, mes)
 
 testar_supabase()
