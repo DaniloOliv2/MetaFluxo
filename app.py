@@ -1,3 +1,4 @@
+from modules.investimentos import tela_investimentos
 from modules.exportar import tela_exportar
 from modules.teste_supabase import testar_supabase
 from modules.recorrencias import tela_recorrencias
@@ -390,7 +391,7 @@ st.progress(progresso_inv)
 st.caption(f"Faltam {fmt(max(0, float(meta_inv) - float(investido)), privacidade)} para bater a meta do mês.")
 st.divider()
 
-aba1, aba2, aba3, aba4, aba5, aba6, aba7, aba8, aba9, aba10 = st.tabs([
+aba1, aba2, aba3, aba4, aba5, aba6, aba7, aba8, aba9, aba10, aba11 = st.tabs([
     "📝 Lançamentos",
     "🏦 Contas",
     "💵 Receitas",
@@ -400,6 +401,7 @@ aba1, aba2, aba3, aba4, aba5, aba6, aba7, aba8, aba9, aba10 = st.tabs([
     "🧾 Faturas",
     "📊 Análises",
     "🚀 Meus sonhos",
+    "💹 Investimentos"
     "📤 Exportar"
 ])
 
@@ -485,8 +487,10 @@ with aba9:
                 if b.button("🗑️ Excluir", key=f"del_sonho_{sonho['id']}"):
                     deletar_sonho(sonho["id"])
                     st.rerun()
+    with aba10:
+    tela_investimentos(user_id)
 
-with aba10:
+with aba11:
     tela_exportar(user_id, mes)
 
 testar_supabase()
