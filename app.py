@@ -1,3 +1,4 @@
+from modules.metas import tela_metas
 from modules.investimentos import tela_investimentos
 from modules.exportar import tela_exportar
 from modules.teste_supabase import testar_supabase
@@ -391,7 +392,7 @@ st.progress(progresso_inv)
 st.caption(f"Faltam {fmt(max(0, float(meta_inv) - float(investido)), privacidade)} para bater a meta do mês.")
 st.divider()
 
-aba1, aba2, aba3, aba4, aba5, aba6, aba7, aba8, aba9, aba10, aba11 = st.tabs([
+aba1, aba2, aba3, aba4, aba5, aba6, aba7, aba8, aba9, aba10, aba11, aba12 = st.tabs([
     "📝 Lançamentos",
     "🏦 Contas",
     "💵 Receitas",
@@ -401,6 +402,7 @@ aba1, aba2, aba3, aba4, aba5, aba6, aba7, aba8, aba9, aba10, aba11 = st.tabs([
     "🧾 Faturas",
     "📊 Análises",
     "🚀 Meus sonhos",
+    "🎯 Metas"
     "💹 Investimentos",
     "📤 Exportar"
 ])
@@ -459,38 +461,21 @@ with aba8:
     )
 
 with aba9:
-    s1, s2 = st.columns([1, 2])
-    with s1:
-        with st.form("novo_sonho"):
-            nome = st.text_input("Nome do objetivo")
-            alvo = st.number_input("Valor da meta (R$)", min_value=0.0, step=100.0, format="%.2f")
-            enviado = st.form_submit_button("Criar objetivo")
-            if enviado:
-                if nome.strip() and alvo > 0:
-                    criar_sonho(user_id, nome.strip(), alvo)
-                    st.rerun()
-                else:
-                    st.warning("Informe nome e valor da meta.")
-    with s2:
-        if not sonhos:
-            st.info("Nenhum sonho cadastrado.")
-        for sonho in sonhos:
-            alvo = float(sonho["alvo"])
-            acumulado = float(sonho["acumulado"])
-            prog = min(acumulado / alvo, 1.0) if alvo > 0 else 0
-            with st.expander(f"⭐ {sonho['nome']} - {prog*100:.1f}%"):
-                st.write(f"Guardado: **{fmt(acumulado, privacidade)}** de **{fmt(alvo, privacidade)}**")
-                st.progress(prog)
-                a, b = st.columns([2, 1])
-                novo_acumulado = a.number_input("Valor acumulado", min_value=0.0, value=acumulado, step=50.0, format="%.2f", key=f"sonho_{sonho['id']}", disabled=privacidade)
-                atualizar_sonho(sonho["id"], novo_acumulado)
-                if b.button("🗑️ Excluir", key=f"del_sonho_{sonho['id']}"):
-                    deletar_sonho(sonho["id"])
-                    st.rerun()
+    tela_metas(user_id)
+    
     with aba10:
-        tela_investimentos(user_id)
+    tela_dashboard_profissional(
+        user_id,
+        mes,
+        renda_manual=renda,
+        investido=investido,
+        privacidade=privacidade
+    )
 
-    with aba11:
-        tela_exportar(user_id, mes)
+with aba11:
+    tela_investimentos(user_id)
+
+with aba12:
+    tela_exportar(user_id, mes)
 
 testar_supabase()
