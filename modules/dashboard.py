@@ -209,10 +209,10 @@ def tela_dashboard_profissional(usuario_id, mes, renda_manual=0, investido=0, pr
                 yaxis_title="Valor"
             )
             st.plotly_chart(
-            fig,
-            use_container_width=True,
-            key=f"grafico_fluxo_dashboard_{mes}"
-        )
+                fig,
+                use_container_width=True,
+                key=f"grafico_fluxo_dashboard_{mes}"
+            )
 
     with col2:
         st.subheader("Gastos por categoria")
@@ -233,10 +233,10 @@ def tela_dashboard_profissional(usuario_id, mes, renda_manual=0, investido=0, pr
             fig2,
             use_container_width=True,
             st.plotly_chart(
-        fig2,
-        use_container_width=True,
-        key=f"grafico_categorias_dashboard_{mes}"
-    )
+                 fig2,
+                 use_container_width=True,
+                 key=f"grafico_categorias_dashboard_{mes}"
+           )
     st.divider()
 
     st.subheader("Resumo inteligente")
