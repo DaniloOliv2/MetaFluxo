@@ -462,18 +462,12 @@ with aba8:
 
 with aba9:
     tela_metas(user_id)
-    
+
 with aba10:
-    tela_dashboard_profissional(
-        user_id,
-        mes,
-        renda_manual=renda,
-        investido=investido,
-        privacidade=privacidade
-    )
+    tela_investimentos(user_id)
 
 with aba11:
-    tela_investimentos(user_id)
+    tela_exportar(user_id, mes)
 
 with aba12:
     tela_exportar(user_id, mes)
