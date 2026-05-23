@@ -229,13 +229,11 @@ def tela_dashboard_profissional(usuario_id, mes, renda_manual=0, investido=0, pr
                 font_color="white",
                 margin=dict(t=10, b=10, l=10, r=10)
             )
+            
             st.plotly_chart(
-            fig2,
-            use_container_width=True,
-            st.plotly_chart(
-                 fig2,
-                 use_container_width=True,
-                 key=f"grafico_categorias_dashboard_{mes}"
+                fig2,
+                use_container_width=True,
+                key=f"grafico_categorias_dashboard_{mes}"
            )
     st.divider()
 
