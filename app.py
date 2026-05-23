@@ -463,7 +463,7 @@ with aba8:
 with aba9:
     tela_metas(user_id)
     
-    with aba10:
+with aba10:
     tela_dashboard_profissional(
         user_id,
         mes,
