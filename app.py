@@ -451,7 +451,6 @@ with aba7:
     tela_faturas(user_id, mes)
 
 with aba8:
-
     tela_dashboard_profissional(
         user_id,
         mes,
@@ -461,13 +460,13 @@ with aba8:
     )
 
 with aba9:
-    tela_metas(user_id)
+    st.info("Área antiga de sonhos será integrada às metas.")
 
 with aba10:
-    tela_investimentos(user_id)
+    tela_metas(user_id)
 
 with aba11:
-    tela_exportar(user_id, mes)
+    tela_investimentos(user_id)
 
 with aba12:
     tela_exportar(user_id, mes)
