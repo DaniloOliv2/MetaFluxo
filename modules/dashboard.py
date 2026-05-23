@@ -211,7 +211,7 @@ def tela_dashboard_profissional(usuario_id, mes, renda_manual=0, investido=0, pr
             st.plotly_chart(
                 fig,
                 use_container_width=True,
-                key=f"grafico_fluxo_dashboard_{mes}"
+               key=f"grafico_fluxo_dashboard_{usuario_id}_{mes}"
             )
 
     with col2:
@@ -233,7 +233,7 @@ def tela_dashboard_profissional(usuario_id, mes, renda_manual=0, investido=0, pr
             st.plotly_chart(
                 fig2,
                 use_container_width=True,
-                key=f"grafico_categorias_dashboard_{mes}"
+               key=f"grafico_categorias_dashboard_{usuario_id}_{mes}"
            )
     st.divider()
 
