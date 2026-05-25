@@ -1,3 +1,4 @@
+from modules.ia_financeira import tela_ia_financeira
 from modules.metas import tela_metas
 from modules.investimentos import tela_investimentos
 from modules.exportar import tela_exportar
@@ -392,7 +393,7 @@ st.progress(progresso_inv)
 st.caption(f"Faltam {fmt(max(0, float(meta_inv) - float(investido)), privacidade)} para bater a meta do mês.")
 st.divider()
 
-aba1, aba2, aba3, aba4, aba5, aba6, aba7, aba8, aba9, aba10, aba11, aba12 = st.tabs([
+aba1, aba2, aba3, aba4, aba5, aba6, aba7, aba8, aba9, aba10, aba11, aba12, aba13 = st.tabs([
     "📝 Lançamentos",
     "🏦 Contas",
     "💵 Receitas",
@@ -404,6 +405,7 @@ aba1, aba2, aba3, aba4, aba5, aba6, aba7, aba8, aba9, aba10, aba11, aba12 = st.t
     "🚀 Meus sonhos",
     "🎯 Metas",
     "💹 Investimentos",
+    "🤖 IA Financeira"
     "📤 Exportar"
 ])
 
@@ -469,6 +471,13 @@ with aba11:
     tela_investimentos(user_id)
 
 with aba12:
+    tela_ia_financeira(
+        user_id,
+        mes,
+        renda_manual=renda
+    )
+
+with aba13:
     tela_exportar(user_id, mes)
 
 testar_supabase()
