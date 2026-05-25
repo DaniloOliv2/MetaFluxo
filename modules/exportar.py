@@ -111,9 +111,9 @@ def gerar_grafico(dados):
     ]
 
     valores = [
-        dados["receitas"],
-        dados["despesas"],
-        dados["faturas"]
+        max(float(dados["receitas"]), 0),
+        max(float(dados["despesas"]), 0),
+        max(float(dados["faturas"]), 0)
     ]
 
     cores = [
@@ -121,6 +121,11 @@ def gerar_grafico(dados):
         "#ef4444",
         "#3b82f6"
     ]
+
+    if sum(valores) <= 0:
+        categorias = ["Sem dados"]
+        valores = [1]
+        cores = ["#94a3b8"]
 
     ax.pie(
         valores,
@@ -147,6 +152,8 @@ def gerar_grafico(dados):
         bbox_inches="tight",
         transparent=True
     )
+
+    plt.close(fig)
 
     img.seek(0)
 
