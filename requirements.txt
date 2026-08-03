@@ -6,3 +6,5 @@ supabase
 openpyxl
 reportlab
 matplotlib
+SQLAlchemy
+psycopg[binary]
