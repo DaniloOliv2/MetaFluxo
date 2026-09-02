@@ -270,7 +270,7 @@ def tela_despesas(usuario_id, mes):
         st.info("Nenhuma despesa cadastrada.")
         return
 
-    for despesa in despesas:
+        for despesa in despesas:
         conta_nome = buscar_nome_conta(despesa.get("conta_id"))
         status = "✅ Paga" if despesa["paga"] else "⏳ Pendente"
 
@@ -282,11 +282,11 @@ def tela_despesas(usuario_id, mes):
             st.write(f"**Vencimento:** {despesa['vencimento']}")
             st.write(f"**Status:** {status}")
 
-           novo_status = st.checkbox(
-            "Marcar como paga",
-            value=bool(despesa["paga"]),
-            key=f"despesas_status_{usuario_id}_{mes}_{despesa['id']}"
-        )
+            novo_status = st.checkbox(
+                "Marcar como paga",
+                value=bool(despesa["paga"]),
+                key=f"despesas_status_{usuario_id}_{mes}_{despesa['id']}"
+            )
 
             if novo_status != bool(despesa["paga"]):
                 atualizar_status_despesa(
@@ -296,11 +296,15 @@ def tela_despesas(usuario_id, mes):
                 )
                 st.rerun()
 
-           if st.button(
+            if st.button(
                 "🗑️ Excluir despesa",
                 key=f"despesas_del_{usuario_id}_{mes}_{despesa['id']}",
                 use_container_width=True
             ):
-                deletar_despesa(usuario_id, despesa["id"])
+                deletar_despesa(
+                    usuario_id,
+                    despesa["id"]
+                )
+
                 st.success("Despesa excluída!")
                 st.rerun()
