@@ -115,7 +115,6 @@ def tela_contas(usuario_id):
 
             saldo = st.number_input(
                 "Saldo inicial",
-                min_value=0.0,
                 step=100.0,
                 format="%.2f",
                 help="Para trinta mil, digite 30000."
@@ -177,7 +176,6 @@ def tela_contas(usuario_id):
 
                     novo_saldo = st.number_input(
                         "Saldo",
-                        min_value=0.0,
                         value=float(conta["saldo"]),
                         step=100.0,
                         format="%.2f",
