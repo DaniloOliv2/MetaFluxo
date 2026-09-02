@@ -296,9 +296,9 @@ def tela_despesas(usuario_id, mes):
                 )
                 st.rerun()
 
-            if st.button(
+           if st.button(
                 "🗑️ Excluir despesa",
-                key=f"del_{despesa['id']}",
+                key=f"despesas_del_{usuario_id}_{mes}_{despesa['id']}",
                 use_container_width=True
             ):
                 deletar_despesa(usuario_id, despesa["id"])
