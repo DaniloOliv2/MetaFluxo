@@ -1,6 +1,6 @@
 import streamlit as st
-from database.supabase_config import supabase
 from datetime import date
+from database.neon_config import executar_sql, buscar_todos
 
 
 def fmt_moeda(valor):
@@ -10,50 +10,84 @@ def fmt_moeda(valor):
         return "R$ 0,00"
 
 
+def garantir_tabela_metas():
+    executar_sql("""
+        CREATE TABLE IF NOT EXISTS metas (
+            id BIGSERIAL PRIMARY KEY,
+            usuario_id BIGINT NOT NULL,
+            nome TEXT NOT NULL,
+            descricao TEXT,
+            valor_meta NUMERIC(15,2) NOT NULL DEFAULT 0,
+            valor_atual NUMERIC(15,2) NOT NULL DEFAULT 0,
+            prazo DATE,
+            categoria TEXT NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+
+
 def criar_meta(usuario_id, nome, descricao, valor_meta, valor_atual, prazo, categoria):
-    supabase.table("metas").insert({
+    executar_sql("""
+        INSERT INTO metas (
+            usuario_id, nome, descricao, valor_meta, valor_atual, prazo, categoria
+        )
+        VALUES (
+            :usuario_id, :nome, :descricao, :valor_meta, :valor_atual, :prazo, :categoria
+        )
+    """, {
         "usuario_id": usuario_id,
         "nome": nome,
         "descricao": descricao,
         "valor_meta": float(valor_meta),
         "valor_atual": float(valor_atual),
-        "prazo": str(prazo) if prazo else None,
+        "prazo": prazo,
         "categoria": categoria
-    }).execute()
+    })
 
 
 def listar_metas(usuario_id):
-    response = supabase.table("metas") \
-        .select("*") \
-        .eq("usuario_id", usuario_id) \
-        .order("id", desc=True) \
-        .execute()
-
-    return response.data
+    return buscar_todos("""
+        SELECT *
+        FROM metas
+        WHERE usuario_id = :usuario_id
+        ORDER BY id DESC
+    """, {
+        "usuario_id": usuario_id
+    })
 
 
 def atualizar_meta(meta_id, nome, descricao, valor_meta, valor_atual, prazo, categoria):
-    supabase.table("metas") \
-        .update({
-            "nome": nome,
-            "descricao": descricao,
-            "valor_meta": float(valor_meta),
-            "valor_atual": float(valor_atual),
-            "prazo": str(prazo) if prazo else None,
-            "categoria": categoria
-        }) \
-        .eq("id", meta_id) \
-        .execute()
+    executar_sql("""
+        UPDATE metas
+        SET nome = :nome,
+            descricao = :descricao,
+            valor_meta = :valor_meta,
+            valor_atual = :valor_atual,
+            prazo = :prazo,
+            categoria = :categoria
+        WHERE id = :meta_id
+    """, {
+        "nome": nome,
+        "descricao": descricao,
+        "valor_meta": float(valor_meta),
+        "valor_atual": float(valor_atual),
+        "prazo": prazo,
+        "categoria": categoria,
+        "meta_id": meta_id
+    })
 
 
 def deletar_meta(meta_id):
-    supabase.table("metas") \
-        .delete() \
-        .eq("id", meta_id) \
-        .execute()
+    executar_sql("""
+        DELETE FROM metas
+        WHERE id = :meta_id
+    """, {
+        "meta_id": meta_id
+    })
 
 
 def tela_metas(usuario_id):
+    garantir_tabela_metas()
 
     st.subheader("🚀 Meus Sonhos e Metas")
 
@@ -71,23 +105,10 @@ def tela_metas(usuario_id):
     ]
 
     with st.expander("➕ Nova meta", expanded=False):
-
         with st.form("form_meta", clear_on_submit=True):
-
-            nome = st.text_input(
-                "Nome da meta",
-                placeholder="Ex: Viagem para Europa"
-            )
-
-            descricao = st.text_area(
-                "Descrição",
-                placeholder="Detalhes da meta..."
-            )
-
-            categoria = st.selectbox(
-                "Categoria",
-                categorias
-            )
+            nome = st.text_input("Nome da meta", placeholder="Ex: Viagem para Europa")
+            descricao = st.text_area("Descrição", placeholder="Detalhes da meta...")
+            categoria = st.selectbox("Categoria", categorias)
 
             valor_meta = st.number_input(
                 "Valor da meta",
@@ -103,26 +124,15 @@ def tela_metas(usuario_id):
                 format="%.2f"
             )
 
-            prazo = st.date_input(
-                "Prazo estimado",
-                value=date.today()
-            )
-
-            enviar = st.form_submit_button(
-                "Criar meta",
-                use_container_width=True
-            )
+            prazo = st.date_input("Prazo estimado", value=date.today())
+            enviar = st.form_submit_button("Criar meta", use_container_width=True)
 
             if enviar:
-
                 if not nome.strip():
                     st.warning("Informe o nome da meta.")
-
                 elif valor_meta <= 0:
                     st.warning("Informe um valor válido.")
-
                 else:
-
                     criar_meta(
                         usuario_id,
                         nome.strip(),
@@ -132,7 +142,6 @@ def tela_metas(usuario_id):
                         prazo,
                         categoria
                     )
-
                     st.success("Meta criada com sucesso!")
                     st.rerun()
 
@@ -144,73 +153,33 @@ def tela_metas(usuario_id):
 
     total_metas = sum(float(m["valor_meta"]) for m in metas)
     total_guardado = sum(float(m["valor_atual"]) for m in metas)
-
-    progresso_total = (
-        total_guardado / total_metas * 100
-        if total_metas > 0
-        else 0
-    )
+    progresso_total = (total_guardado / total_metas * 100) if total_metas > 0 else 0
 
     c1, c2, c3 = st.columns(3)
-
-    c1.metric(
-        "🎯 Total das metas",
-        fmt_moeda(total_metas)
-    )
-
-    c2.metric(
-        "💰 Total guardado",
-        fmt_moeda(total_guardado)
-    )
-
-    c3.metric(
-        "📈 Progresso geral",
-        f"{progresso_total:.1f}%"
-    )
+    c1.metric("🎯 Total das metas", fmt_moeda(total_metas))
+    c2.metric("💰 Total guardado", fmt_moeda(total_guardado))
+    c3.metric("📈 Progresso geral", f"{progresso_total:.1f}%")
 
     st.divider()
 
     for meta in metas:
-
         valor_meta = float(meta["valor_meta"])
         valor_atual = float(meta["valor_atual"])
-
-        progresso = (
-            valor_atual / valor_meta
-            if valor_meta > 0
-            else 0
-        )
-
+        progresso = valor_atual / valor_meta if valor_meta > 0 else 0
         faltam = valor_meta - valor_atual
 
         with st.container(border=True):
-
             st.markdown(f"## 🚀 {meta['nome']}")
-
             st.write(f"**Categoria:** {meta['categoria']}")
 
             if meta["descricao"]:
                 st.write(meta["descricao"])
 
-            st.progress(
-                min(progresso, 1.0)
-            )
-
-            st.write(
-                f"**{progresso * 100:.1f}% concluído**"
-            )
-
-            st.write(
-                f"💰 Guardado: {fmt_moeda(valor_atual)}"
-            )
-
-            st.write(
-                f"🎯 Meta: {fmt_moeda(valor_meta)}"
-            )
-
-            st.write(
-                f"📌 Faltam: {fmt_moeda(faltam)}"
-            )
+            st.progress(min(progresso, 1.0))
+            st.write(f"**{progresso * 100:.1f}% concluído**")
+            st.write(f"💰 Guardado: {fmt_moeda(valor_atual)}")
+            st.write(f"🎯 Meta: {fmt_moeda(valor_meta)}")
+            st.write(f"📌 Faltam: {fmt_moeda(faltam)}")
 
             if meta["prazo"]:
                 st.write(f"📅 Prazo: {meta['prazo']}")
@@ -219,7 +188,6 @@ def tela_metas(usuario_id):
                 st.success("🎉 Meta concluída!")
 
             with st.expander("✏️ Editar / Excluir"):
-
                 novo_nome = st.text_input(
                     "Nome",
                     value=meta["nome"],
@@ -258,10 +226,11 @@ def tela_metas(usuario_id):
                     key=f"meta_atual_{meta['id']}"
                 )
 
+                valor_prazo = meta["prazo"] if meta["prazo"] else date.today()
+
                 novo_prazo = st.date_input(
                     "Prazo",
-                    value=date.fromisoformat(meta["prazo"])
-                    if meta["prazo"] else date.today(),
+                    value=valor_prazo,
                     key=f"prazo_meta_{meta['id']}"
                 )
 
@@ -272,7 +241,6 @@ def tela_metas(usuario_id):
                     key=f"salvar_meta_{meta['id']}",
                     use_container_width=True
                 ):
-
                     atualizar_meta(
                         meta["id"],
                         novo_nome.strip(),
@@ -282,7 +250,6 @@ def tela_metas(usuario_id):
                         novo_prazo,
                         nova_categoria
                     )
-
                     st.success("Meta atualizada!")
                     st.rerun()
 
@@ -291,9 +258,6 @@ def tela_metas(usuario_id):
                     key=f"excluir_meta_{meta['id']}",
                     use_container_width=True
                 ):
-
                     deletar_meta(meta["id"])
-
                     st.success("Meta excluída!")
-
                     st.rerun()
