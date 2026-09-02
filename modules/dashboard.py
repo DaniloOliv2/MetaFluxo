@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from database.supabase_config import supabase
+from database.neon_config import buscar_todos, buscar_um
 
 
 def fmt_moeda(valor):
@@ -12,80 +12,64 @@ def fmt_moeda(valor):
 
 
 def buscar_resumo(usuario_id, mes):
+    saldo = buscar_um("""
+        SELECT COALESCE(SUM(saldo), 0) AS total
+        FROM contas
+        WHERE usuario_id = :usuario_id
+    """, {
+        "usuario_id": usuario_id
+    })
 
-    saldo_contas = supabase.table("contas") \
-        .select("saldo") \
-        .eq("usuario_id", usuario_id) \
-        .execute()
+    receitas = buscar_todos("""
+        SELECT valor, recebida
+        FROM receitas
+        WHERE usuario_id = :usuario_id
+          AND mes = :mes
+    """, {
+        "usuario_id": usuario_id,
+        "mes": mes
+    })
 
-    saldo_total = sum(float(c["saldo"]) for c in saldo_contas.data)
+    despesas = buscar_todos("""
+        SELECT valor, paga
+        FROM despesas
+        WHERE usuario_id = :usuario_id
+          AND mes = :mes
+    """, {
+        "usuario_id": usuario_id,
+        "mes": mes
+    })
 
-    receitas = supabase.table("receitas") \
-    .select("valor, recebida") \
-    .eq("usuario_id", usuario_id) \
-    .eq("mes", mes) \
-    .execute()
+    compras = buscar_todos("""
+        SELECT valor_total
+        FROM compras_cartao
+        WHERE usuario_id = :usuario_id
+          AND mes = :mes
+    """, {
+        "usuario_id": usuario_id,
+        "mes": mes
+    })
 
-    despesas = supabase.table("despesas") \
-    .select("valor, paga") \
-    .eq("usuario_id", usuario_id) \
-    .eq("mes", mes) \
-    .execute()
+    faturas = buscar_todos("""
+        SELECT valor, paga
+        FROM faturas
+        WHERE usuario_id = :usuario_id
+          AND mes = :mes
+    """, {
+        "usuario_id": usuario_id,
+        "mes": mes
+    })
 
-    compras = supabase.table("compras_cartao") \
-    .select("valor_total") \
-    .eq("usuario_id", usuario_id) \
-    .eq("mes", mes) \
-    .execute()
-
-    faturas = supabase.table("faturas") \
-    .select("valor, paga") \
-    .eq("usuario_id", usuario_id) \
-    .eq("mes", mes) \
-    .execute()
-    total_receitas = sum(
-        float(r["valor"])
-        for r in receitas.data
-        if r["recebida"]
-    )
-
-    receitas_a_receber = sum(
-        float(r["valor"])
-        for r in receitas.data
-        if not r["recebida"]
-    )
-
-    despesas_pagas = sum(
-        float(d["valor"])
-        for d in despesas.data
-        if d["paga"]
-    )
-
-    despesas_pendentes = sum(
-        float(d["valor"])
-        for d in despesas.data
-        if not d["paga"]
-    )
-
-    total_cartao = sum(
-        float(c["valor_total"])
-        for c in compras.data
-    )
-
-    faturas_pendentes = sum(
-        float(f["valor"])
-        for f in faturas.data
-        if not f["paga"]
-    )
-
-    faturas_pagas = sum(
-        float(f["valor"])
-        for f in faturas.data
-        if f["paga"]
-    )
+    total_receitas = sum(float(r["valor"]) for r in receitas if r["recebida"])
+    receitas_a_receber = sum(float(r["valor"]) for r in receitas if not r["recebida"])
+    despesas_pagas = sum(float(d["valor"]) for d in despesas if d["paga"])
+    despesas_pendentes = sum(float(d["valor"]) for d in despesas if not d["paga"])
+    total_cartao = sum(float(c["valor_total"]) for c in compras)
+    faturas_pendentes = sum(float(f["valor"]) for f in faturas if not f["paga"])
+    faturas_pagas = sum(float(f["valor"]) for f in faturas if f["paga"])
 
     return {
-        "saldo_contas": saldo_total,
+        "saldo_contas": float(saldo["total"] or 0),
         "total_receitas": total_receitas,
         "receitas_a_receber": receitas_a_receber,
         "total_despesas_pagas": despesas_pagas,
@@ -97,29 +81,36 @@ def buscar_resumo(usuario_id, mes):
 
 
 def dados_categorias(usuario_id, mes):
+    despesas = buscar_todos("""
+        SELECT categoria, valor
+        FROM despesas
+        WHERE usuario_id = :usuario_id
+          AND mes = :mes
+    """, {
+        "usuario_id": usuario_id,
+        "mes": mes
+    })
 
-    despesas_resp = supabase.table("despesas") \
-        .select("categoria, valor") \
-        .eq("usuario_id", usuario_id) \
-        .eq("mes", mes) \
-        .execute()
-
-    compras_resp = supabase.table("compras_cartao") \
-        .select("categoria, valor_total") \
-        .eq("usuario_id", usuario_id) \
-        .eq("mes", mes) \
-        .execute()
+    compras = buscar_todos("""
+        SELECT categoria, valor_total
+        FROM compras_cartao
+        WHERE usuario_id = :usuario_id
+          AND mes = :mes
+    """, {
+        "usuario_id": usuario_id,
+        "mes": mes
+    })
 
     dados = []
 
-    for item in despesas_resp.data:
+    for item in despesas:
         dados.append({
             "categoria": item["categoria"],
             "valor": float(item["valor"]),
             "tipo": "Despesa"
         })
 
-    for item in compras_resp.data:
+    for item in compras:
         dados.append({
             "categoria": item["categoria"],
             "valor": float(item["valor_total"]),
@@ -235,6 +226,7 @@ def tela_dashboard_profissional(usuario_id, mes, renda_manual=0, investido=0, pr
                 text_auto=".2s",
                 template="plotly_dark"
             )
+
             fig.update_layout(
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
@@ -243,6 +235,7 @@ def tela_dashboard_profissional(usuario_id, mes, renda_manual=0, investido=0, pr
                 yaxis_title="Valor",
                 height=380
             )
+
             st.plotly_chart(
                 fig,
                 use_container_width=True,
@@ -257,6 +250,7 @@ def tela_dashboard_profissional(usuario_id, mes, renda_manual=0, investido=0, pr
             st.info("Sem dados suficientes para gerar gráfico.")
         else:
             cat = df_cat.groupby("categoria", as_index=False)["valor"].sum()
+
             fig2 = px.pie(
                 cat,
                 values="valor",
@@ -264,6 +258,7 @@ def tela_dashboard_profissional(usuario_id, mes, renda_manual=0, investido=0, pr
                 hole=0.55,
                 template="plotly_dark"
             )
+
             fig2.update_layout(
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
@@ -271,6 +266,7 @@ def tela_dashboard_profissional(usuario_id, mes, renda_manual=0, investido=0, pr
                 margin=dict(t=10, b=10, l=10, r=10),
                 height=380
             )
+
             st.plotly_chart(
                 fig2,
                 use_container_width=True,
@@ -278,7 +274,6 @@ def tela_dashboard_profissional(usuario_id, mes, renda_manual=0, investido=0, pr
             )
 
     st.divider()
-
     st.subheader("🤖 Resumo inteligente")
 
     if resumo["faturas_pendentes"] > 0:
