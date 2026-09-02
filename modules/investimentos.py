@@ -1,5 +1,5 @@
 import streamlit as st
-from database.supabase_config import supabase
+from database.neon_config import executar_sql, buscar_todos
 
 
 def fmt_moeda(valor):
@@ -9,8 +9,34 @@ def fmt_moeda(valor):
         return "R$ 0,00"
 
 
+def garantir_tabela_investimentos():
+    executar_sql("""
+        CREATE TABLE IF NOT EXISTS investimentos (
+            id BIGSERIAL PRIMARY KEY,
+            usuario_id BIGINT NOT NULL,
+            nome TEXT NOT NULL,
+            categoria TEXT NOT NULL,
+            instituicao TEXT,
+            valor_inicial NUMERIC(15,2) NOT NULL DEFAULT 0,
+            valor_atual NUMERIC(15,2) NOT NULL DEFAULT 0,
+            rendimento NUMERIC(15,2) NOT NULL DEFAULT 0,
+            data_investimento DATE,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+
+
 def criar_investimento(usuario_id, nome, categoria, instituicao, valor_inicial, valor_atual, rendimento, data_investimento):
-    supabase.table("investimentos").insert({
+    executar_sql("""
+        INSERT INTO investimentos (
+            usuario_id, nome, categoria, instituicao,
+            valor_inicial, valor_atual, rendimento, data_investimento
+        )
+        VALUES (
+            :usuario_id, :nome, :categoria, :instituicao,
+            :valor_inicial, :valor_atual, :rendimento, :data_investimento
+        )
+    """, {
         "usuario_id": usuario_id,
         "nome": nome,
         "categoria": categoria,
@@ -18,42 +44,54 @@ def criar_investimento(usuario_id, nome, categoria, instituicao, valor_inicial, 
         "valor_inicial": float(valor_inicial),
         "valor_atual": float(valor_atual),
         "rendimento": float(rendimento),
-        "data_investimento": str(data_investimento)
-    }).execute()
+        "data_investimento": data_investimento
+    })
 
 
 def listar_investimentos(usuario_id):
-    response = supabase.table("investimentos") \
-        .select("*") \
-        .eq("usuario_id", usuario_id) \
-        .order("id", desc=True) \
-        .execute()
-
-    return response.data
+    return buscar_todos("""
+        SELECT *
+        FROM investimentos
+        WHERE usuario_id = :usuario_id
+        ORDER BY id DESC
+    """, {
+        "usuario_id": usuario_id
+    })
 
 
 def atualizar_investimento(investimento_id, nome, categoria, instituicao, valor_inicial, valor_atual, rendimento):
-    supabase.table("investimentos") \
-        .update({
-            "nome": nome,
-            "categoria": categoria,
-            "instituicao": instituicao,
-            "valor_inicial": float(valor_inicial),
-            "valor_atual": float(valor_atual),
-            "rendimento": float(rendimento)
-        }) \
-        .eq("id", investimento_id) \
-        .execute()
+    executar_sql("""
+        UPDATE investimentos
+        SET nome = :nome,
+            categoria = :categoria,
+            instituicao = :instituicao,
+            valor_inicial = :valor_inicial,
+            valor_atual = :valor_atual,
+            rendimento = :rendimento
+        WHERE id = :investimento_id
+    """, {
+        "nome": nome,
+        "categoria": categoria,
+        "instituicao": instituicao,
+        "valor_inicial": float(valor_inicial),
+        "valor_atual": float(valor_atual),
+        "rendimento": float(rendimento),
+        "investimento_id": investimento_id
+    })
 
 
 def deletar_investimento(investimento_id):
-    supabase.table("investimentos") \
-        .delete() \
-        .eq("id", investimento_id) \
-        .execute()
+    executar_sql("""
+        DELETE FROM investimentos
+        WHERE id = :investimento_id
+    """, {
+        "investimento_id": investimento_id
+    })
 
 
 def tela_investimentos(usuario_id):
+    garantir_tabela_investimentos()
+
     st.subheader("💹 Investimentos")
 
     categorias = [
@@ -90,7 +128,6 @@ def tela_investimentos(usuario_id):
             )
 
             rendimento = valor_atual - valor_inicial
-
             data_investimento = st.date_input("Data do investimento")
 
             enviar = st.form_submit_button("Cadastrar investimento", use_container_width=True)
@@ -137,8 +174,7 @@ def tela_investimentos(usuario_id):
         rendimento_item = float(investimento["valor_atual"]) - float(investimento["valor_inicial"])
         rentabilidade_item = (
             rendimento_item / float(investimento["valor_inicial"]) * 100
-            if float(investimento["valor_inicial"]) > 0
-            else 0
+            if float(investimento["valor_inicial"]) > 0 else 0
         )
 
         with st.container(border=True):
@@ -152,13 +188,20 @@ def tela_investimentos(usuario_id):
             st.write(f"**Data:** {investimento['data_investimento']}")
 
             with st.expander("✏️ Editar / Excluir"):
-                novo_nome = st.text_input("Nome", value=investimento["nome"], key=f"nome_inv_{investimento['id']}")
+                novo_nome = st.text_input(
+                    "Nome",
+                    value=investimento["nome"],
+                    key=f"nome_inv_{investimento['id']}"
+                )
+
                 nova_categoria = st.selectbox(
                     "Categoria",
                     categorias,
-                    index=categorias.index(investimento["categoria"]) if investimento["categoria"] in categorias else 0,
+                    index=categorias.index(investimento["categoria"])
+                    if investimento["categoria"] in categorias else 0,
                     key=f"cat_inv_{investimento['id']}"
                 )
+
                 nova_instituicao = st.text_input(
                     "Instituição",
                     value=investimento["instituicao"] or "",
@@ -187,7 +230,11 @@ def tela_investimentos(usuario_id):
 
                 b1, b2 = st.columns(2)
 
-                if b1.button("Salvar", key=f"salvar_inv_{investimento['id']}", use_container_width=True):
+                if b1.button(
+                    "Salvar",
+                    key=f"salvar_inv_{investimento['id']}",
+                    use_container_width=True
+                ):
                     atualizar_investimento(
                         investimento["id"],
                         novo_nome.strip(),
@@ -200,7 +247,11 @@ def tela_investimentos(usuario_id):
                     st.success("Investimento atualizado!")
                     st.rerun()
 
-                if b2.button("Excluir", key=f"excluir_inv_{investimento['id']}", use_container_width=True):
+                if b2.button(
+                    "Excluir",
+                    key=f"excluir_inv_{investimento['id']}",
+                    use_container_width=True
+                ):
                     deletar_investimento(investimento["id"])
                     st.success("Investimento excluído!")
                     st.rerun()
