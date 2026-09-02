@@ -1,5 +1,5 @@
 import streamlit as st
-from utils.database import conectar
+from database.neon_config import executar_sql, buscar_todos, buscar_um
 
 
 def fmt_moeda(valor):
@@ -9,73 +9,43 @@ def fmt_moeda(valor):
         return "R$ 0,00"
 
 
-def garantir_tabela_despesas():
-    conn = conectar()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS despesas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario_id INTEGER NOT NULL,
-            mes TEXT NOT NULL,
-            descricao TEXT NOT NULL,
-            categoria TEXT NOT NULL,
-            conta_id INTEGER,
-            valor REAL NOT NULL DEFAULT 0,
-            paga INTEGER NOT NULL DEFAULT 0,
-            vencimento TEXT,
-            recorrente INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    conn.commit()
-    conn.close()
-
-
 def listar_modelos_recorrentes(usuario_id):
-    garantir_tabela_despesas()
-
-    conn = conectar()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT descricao, categoria, conta_id, valor, vencimento
+    return buscar_todos("""
+        SELECT DISTINCT
+            descricao,
+            categoria,
+            conta_id,
+            valor,
+            vencimento
         FROM despesas
-        WHERE usuario_id = ? AND recorrente = 1
-        GROUP BY descricao, categoria, conta_id, valor
+        WHERE usuario_id = :usuario_id
+          AND recorrente = TRUE
         ORDER BY descricao ASC
-    """, (usuario_id,))
-
-    dados = cursor.fetchall()
-    conn.close()
-    return dados
+    """, {
+        "usuario_id": usuario_id
+    })
 
 
 def despesa_ja_existe(usuario_id, mes, descricao, categoria, conta_id, valor):
-    conn = conectar()
-    cursor = conn.cursor()
-
-    existe = cursor.execute("""
+    existe = buscar_um("""
         SELECT id
         FROM despesas
-        WHERE usuario_id = ?
-          AND mes = ?
-          AND descricao = ?
-          AND categoria = ?
-          AND conta_id = ?
-          AND valor = ?
+        WHERE usuario_id = :usuario_id
+          AND mes = :mes
+          AND descricao = :descricao
+          AND categoria = :categoria
+          AND conta_id IS NOT DISTINCT FROM :conta_id
+          AND valor = :valor
         LIMIT 1
-    """, (
-        usuario_id,
-        mes,
-        descricao,
-        categoria,
-        conta_id,
-        float(valor)
-    )).fetchone()
+    """, {
+        "usuario_id": usuario_id,
+        "mes": mes,
+        "descricao": descricao,
+        "categoria": categoria,
+        "conta_id": conta_id,
+        "valor": float(valor)
+    })
 
-    conn.close()
     return existe is not None
 
 
@@ -85,74 +55,77 @@ def gerar_recorrencias(usuario_id, mes):
     if not modelos:
         return 0
 
-    conn = conectar()
-    cursor = conn.cursor()
-
     criadas = 0
 
     for item in modelos:
-        descricao = item["descricao"]
-        categoria = item["categoria"]
-        conta_id = item["conta_id"]
-        valor = float(item["valor"])
-        vencimento = item["vencimento"]
-
-        if despesa_ja_existe(usuario_id, mes, descricao, categoria, conta_id, valor):
-            continue
-
-        cursor.execute("""
-            INSERT INTO despesas (
-                usuario_id, mes, descricao, categoria, conta_id, valor, paga, vencimento, recorrente
-            )
-            VALUES (?, ?, ?, ?, ?, ?, 0, ?, 1)
-        """, (
+        if despesa_ja_existe(
             usuario_id,
             mes,
-            descricao,
-            categoria,
-            conta_id,
-            valor,
-            vencimento
-        ))
+            item["descricao"],
+            item["categoria"],
+            item["conta_id"],
+            item["valor"]
+        ):
+            continue
+
+        executar_sql("""
+            INSERT INTO despesas (
+                usuario_id,
+                mes,
+                descricao,
+                categoria,
+                conta_id,
+                valor,
+                paga,
+                vencimento,
+                recorrente
+            )
+            VALUES (
+                :usuario_id,
+                :mes,
+                :descricao,
+                :categoria,
+                :conta_id,
+                :valor,
+                FALSE,
+                :vencimento,
+                TRUE
+            )
+        """, {
+            "usuario_id": usuario_id,
+            "mes": mes,
+            "descricao": item["descricao"],
+            "categoria": item["categoria"],
+            "conta_id": item["conta_id"],
+            "valor": float(item["valor"]),
+            "vencimento": item["vencimento"]
+        })
 
         criadas += 1
-
-    conn.commit()
-    conn.close()
 
     return criadas
 
 
 def listar_recorrencias(usuario_id):
-    modelos = listar_modelos_recorrentes(usuario_id)
-
-    resultado = []
-
-    conn = conectar()
-    cursor = conn.cursor()
-
-    for item in modelos:
-        conta = cursor.execute("""
-            SELECT nome
-            FROM contas
-            WHERE id = ? AND usuario_id = ?
-        """, (item["conta_id"], usuario_id)).fetchone()
-
-        resultado.append({
-            "descricao": item["descricao"],
-            "categoria": item["categoria"],
-            "conta": conta["nome"] if conta else "Sem conta",
-            "valor": float(item["valor"]),
-            "vencimento": item["vencimento"]
-        })
-
-    conn.close()
-    return resultado
+    return buscar_todos("""
+        SELECT DISTINCT
+            d.descricao,
+            d.categoria,
+            d.valor,
+            d.vencimento,
+            COALESCE(c.nome, 'Sem conta') AS conta
+        FROM despesas d
+        LEFT JOIN contas c
+            ON c.id = d.conta_id
+        WHERE d.usuario_id = :usuario_id
+          AND d.recorrente = TRUE
+        ORDER BY d.descricao ASC
+    """, {
+        "usuario_id": usuario_id
+    })
 
 
 def tela_recorrencias(usuario_id, mes):
-    garantir_tabela_despesas()
-
     st.subheader("📅 Recorrências")
 
     st.info(
@@ -181,7 +154,7 @@ def tela_recorrencias(usuario_id, mes):
 
     st.divider()
 
-    total = sum(item["valor"] for item in recorrencias)
+    total = sum(float(item["valor"]) for item in recorrencias)
 
     st.metric("Total mensal previsto em recorrências", fmt_moeda(total))
 
