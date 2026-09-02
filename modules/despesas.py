@@ -33,7 +33,7 @@ def garantir_tabela_despesas():
 
 def listar_contas(usuario_id):
     return buscar_todos("""
-        SELECT *
+        SELECT id, usuario_id, nome, tipo, saldo
         FROM contas
         WHERE usuario_id = :usuario_id
         ORDER BY nome
@@ -42,15 +42,39 @@ def listar_contas(usuario_id):
     })
 
 
-def criar_despesa(usuario_id, mes, descricao, categoria, conta_id, valor, paga, vencimento, recorrente):
+def criar_despesa(
+    usuario_id,
+    mes,
+    descricao,
+    categoria,
+    conta_id,
+    valor,
+    paga,
+    vencimento,
+    recorrente
+):
     executar_sql("""
         INSERT INTO despesas (
-            usuario_id, mes, descricao, categoria, conta_id,
-            valor, paga, vencimento, recorrente
+            usuario_id,
+            mes,
+            descricao,
+            categoria,
+            conta_id,
+            valor,
+            paga,
+            vencimento,
+            recorrente
         )
         VALUES (
-            :usuario_id, :mes, :descricao, :categoria, :conta_id,
-            :valor, :paga, :vencimento, :recorrente
+            :usuario_id,
+            :mes,
+            :descricao,
+            :categoria,
+            :conta_id,
+            :valor,
+            :paga,
+            :vencimento,
+            :recorrente
         )
     """, {
         "usuario_id": usuario_id,
@@ -64,6 +88,8 @@ def criar_despesa(usuario_id, mes, descricao, categoria, conta_id, valor, paga, 
         "recorrente": bool(recorrente)
     })
 
+    # Se a despesa já foi cadastrada como paga,
+    # desconta o valor da conta.
     if paga and conta_id:
         executar_sql("""
             UPDATE contas
@@ -79,35 +105,34 @@ def criar_despesa(usuario_id, mes, descricao, categoria, conta_id, valor, paga, 
 
 def listar_despesas(usuario_id, mes):
     return buscar_todos("""
-        SELECT *
-        FROM despesas
-        WHERE usuario_id = :usuario_id
-          AND mes = :mes
-        ORDER BY id DESC
+        SELECT
+            d.id,
+            d.usuario_id,
+            d.mes,
+            d.descricao,
+            d.categoria,
+            d.conta_id,
+            d.valor,
+            d.paga,
+            d.vencimento,
+            d.recorrente,
+            d.created_at,
+            c.nome AS conta_nome
+        FROM despesas d
+        LEFT JOIN contas c
+            ON c.id = d.conta_id
+        WHERE d.usuario_id = :usuario_id
+          AND d.mes = :mes
+        ORDER BY d.id DESC
     """, {
         "usuario_id": usuario_id,
         "mes": mes
     })
 
 
-def buscar_nome_conta(conta_id):
-    if not conta_id:
-        return "Sem conta"
-
-    conta = buscar_um("""
-        SELECT nome
-        FROM contas
-        WHERE id = :conta_id
-    """, {
-        "conta_id": conta_id
-    })
-
-    return conta["nome"] if conta else "Sem conta"
-
-
 def atualizar_status_despesa(usuario_id, despesa_id, novo_status):
     despesa = buscar_um("""
-        SELECT *
+        SELECT id, usuario_id, conta_id, valor, paga
         FROM despesas
         WHERE id = :despesa_id
           AND usuario_id = :usuario_id
@@ -120,32 +145,42 @@ def atualizar_status_despesa(usuario_id, despesa_id, novo_status):
         return
 
     status_atual = bool(despesa["paga"])
+    novo_status = bool(novo_status)
+
+    # Não faz nada se o status não mudou.
+    if status_atual == novo_status:
+        return
+
     valor = float(despesa["valor"])
     conta_id = despesa["conta_id"]
 
-    if conta_id and status_atual != bool(novo_status):
-        if novo_status:
-            executar_sql("""
-                UPDATE contas
-                SET saldo = saldo - :valor
-                WHERE id = :conta_id
-                  AND usuario_id = :usuario_id
-            """, {
-                "valor": valor,
-                "conta_id": conta_id,
-                "usuario_id": usuario_id
-            })
-        else:
-            executar_sql("""
-                UPDATE contas
-                SET saldo = saldo + :valor
-                WHERE id = :conta_id
-                  AND usuario_id = :usuario_id
-            """, {
-                "valor": valor,
-                "conta_id": conta_id,
-                "usuario_id": usuario_id
-            })
+    # Se passou de pendente para paga:
+    # desconta da conta.
+    if conta_id and novo_status:
+        executar_sql("""
+            UPDATE contas
+            SET saldo = saldo - :valor
+            WHERE id = :conta_id
+              AND usuario_id = :usuario_id
+        """, {
+            "valor": valor,
+            "conta_id": conta_id,
+            "usuario_id": usuario_id
+        })
+
+    # Se passou de paga para pendente:
+    # devolve o valor para a conta.
+    elif conta_id and not novo_status:
+        executar_sql("""
+            UPDATE contas
+            SET saldo = saldo + :valor
+            WHERE id = :conta_id
+              AND usuario_id = :usuario_id
+        """, {
+            "valor": valor,
+            "conta_id": conta_id,
+            "usuario_id": usuario_id
+        })
 
     executar_sql("""
         UPDATE despesas
@@ -153,7 +188,7 @@ def atualizar_status_despesa(usuario_id, despesa_id, novo_status):
         WHERE id = :despesa_id
           AND usuario_id = :usuario_id
     """, {
-        "paga": bool(novo_status),
+        "paga": novo_status,
         "despesa_id": despesa_id,
         "usuario_id": usuario_id
     })
@@ -161,7 +196,7 @@ def atualizar_status_despesa(usuario_id, despesa_id, novo_status):
 
 def deletar_despesa(usuario_id, despesa_id):
     despesa = buscar_um("""
-        SELECT *
+        SELECT id, usuario_id, conta_id, valor, paga
         FROM despesas
         WHERE id = :despesa_id
           AND usuario_id = :usuario_id
@@ -170,7 +205,12 @@ def deletar_despesa(usuario_id, despesa_id):
         "usuario_id": usuario_id
     })
 
-    if despesa and despesa["paga"] and despesa["conta_id"]:
+    if not despesa:
+        return
+
+    # Se a despesa estava paga, o dinheiro havia sido
+    # descontado da conta. Ao excluir, devolvemos o valor.
+    if despesa["paga"] and despesa["conta_id"]:
         executar_sql("""
             UPDATE contas
             SET saldo = saldo + :valor
@@ -213,7 +253,9 @@ def tela_despesas(usuario_id, mes):
     contas = listar_contas(usuario_id)
 
     if not contas:
-        st.warning("Antes de cadastrar despesas, crie pelo menos uma conta.")
+        st.warning(
+            "Antes de cadastrar despesas, crie pelo menos uma conta."
+        )
         return
 
     contas_opcoes = {
@@ -221,90 +263,212 @@ def tela_despesas(usuario_id, mes):
         for conta in contas
     }
 
-    with st.expander("➕ Nova despesa"):
-        with st.form("nova_despesa", clear_on_submit=True):
-            descricao = st.text_input("Descrição")
-            categoria = st.selectbox("Categoria", categorias)
-            conta_nome = st.selectbox("Conta", list(contas_opcoes.keys()))
+    # =====================================================
+    # NOVA DESPESA
+    # =====================================================
+
+    with st.expander("➕ Nova despesa", expanded=False):
+        with st.form(
+            "form_nova_despesa",
+            clear_on_submit=True
+        ):
+            descricao = st.text_input(
+                "Descrição",
+                placeholder="Ex: Aluguel, supermercado, combustível"
+            )
+
+            categoria = st.selectbox(
+                "Categoria",
+                categorias
+            )
+
+            conta_nome = st.selectbox(
+                "Conta",
+                list(contas_opcoes.keys())
+            )
 
             valor = st.number_input(
                 "Valor",
                 min_value=0.0,
-                step=100.0,
-                format="%.2f"
+                step=10.0,
+                format="%.2f",
+                help="Exemplo: para R$ 150,00 digite 150."
             )
 
-            vencimento = st.date_input("Vencimento")
-            paga = st.checkbox("Já foi paga?")
-            recorrente = st.checkbox("Despesa recorrente?")
+            vencimento = st.date_input(
+                "Vencimento"
+            )
 
-            enviar = st.form_submit_button("Cadastrar despesa", use_container_width=True)
+            paga = st.checkbox(
+                "Já foi paga?"
+            )
+
+            recorrente = st.checkbox(
+                "Despesa recorrente?"
+            )
+
+            enviar = st.form_submit_button(
+                "Cadastrar despesa",
+                use_container_width=True
+            )
 
             if enviar:
-                criar_despesa(
-                    usuario_id,
-                    mes,
-                    descricao,
-                    categoria,
-                    contas_opcoes[conta_nome],
-                    valor,
-                    paga,
-                    vencimento,
-                    recorrente
-                )
-                st.success("Despesa cadastrada!")
-                st.rerun()
+                if not descricao.strip():
+                    st.warning(
+                        "Informe a descrição da despesa."
+                    )
 
-    despesas = listar_despesas(usuario_id, mes)
+                elif valor <= 0:
+                    st.warning(
+                        "Informe um valor maior que zero."
+                    )
 
-    total_pago = sum(float(d["valor"]) for d in despesas if d["paga"])
-    total_pendente = sum(float(d["valor"]) for d in despesas if not d["paga"])
+                else:
+                    criar_despesa(
+                        usuario_id=usuario_id,
+                        mes=mes,
+                        descricao=descricao.strip(),
+                        categoria=categoria,
+                        conta_id=contas_opcoes[conta_nome],
+                        valor=valor,
+                        paga=paga,
+                        vencimento=vencimento,
+                        recorrente=recorrente
+                    )
 
-    c1, c2 = st.columns(2)
-    c1.metric("✅ Pago", fmt_moeda(total_pago))
-    c2.metric("⏳ Pendente", fmt_moeda(total_pendente))
+                    st.success(
+                        "Despesa cadastrada com sucesso!"
+                    )
+
+                    st.rerun()
+
+    # =====================================================
+    # LISTAGEM
+    # =====================================================
+
+    despesas = listar_despesas(
+        usuario_id,
+        mes
+    )
+
+    total_pago = sum(
+        float(d["valor"])
+        for d in despesas
+        if bool(d["paga"])
+    )
+
+    total_pendente = sum(
+        float(d["valor"])
+        for d in despesas
+        if not bool(d["paga"])
+    )
+
+    col1, col2 = st.columns(2)
+
+    col1.metric(
+        "✅ Pago",
+        fmt_moeda(total_pago)
+    )
+
+    col2.metric(
+        "⏳ Pendente",
+        fmt_moeda(total_pendente)
+    )
 
     st.divider()
 
     if not despesas:
-        st.info("Nenhuma despesa cadastrada.")
+        st.info(
+            "Nenhuma despesa cadastrada neste mês."
+        )
         return
 
-        for despesa in despesas:
-        conta_nome = buscar_nome_conta(despesa.get("conta_id"))
-        status = "✅ Paga" if despesa["paga"] else "⏳ Pendente"
+    # =====================================================
+    # DESPESAS CADASTRADAS
+    # =====================================================
+
+    for despesa in despesas:
+        despesa_id = despesa["id"]
+
+        conta_nome = (
+            despesa["conta_nome"]
+            if despesa.get("conta_nome")
+            else "Sem conta"
+        )
+
+        status = (
+            "✅ Paga"
+            if bool(despesa["paga"])
+            else "⏳ Pendente"
+        )
 
         with st.container(border=True):
-            st.markdown(f"### {despesa['descricao']}")
-            st.write(f"**Categoria:** {despesa['categoria']}")
-            st.write(f"**Conta:** {conta_nome}")
-            st.write(f"**Valor:** {fmt_moeda(despesa['valor'])}")
-            st.write(f"**Vencimento:** {despesa['vencimento']}")
-            st.write(f"**Status:** {status}")
+            st.markdown(
+                f"### {despesa['descricao']}"
+            )
+
+            st.write(
+                f"**Categoria:** {despesa['categoria']}"
+            )
+
+            st.write(
+                f"**Conta:** {conta_nome}"
+            )
+
+            st.write(
+                f"**Valor:** {fmt_moeda(despesa['valor'])}"
+            )
+
+            st.write(
+                f"**Vencimento:** {despesa['vencimento']}"
+            )
+
+            st.write(
+                f"**Status:** {status}"
+            )
+
+            if bool(despesa.get("recorrente")):
+                st.caption(
+                    "🔁 Despesa recorrente"
+                )
 
             novo_status = st.checkbox(
                 "Marcar como paga",
                 value=bool(despesa["paga"]),
-                key=f"despesas_status_{usuario_id}_{mes}_{despesa['id']}"
+                key=(
+                    f"despesas_status_"
+                    f"{usuario_id}_"
+                    f"{mes}_"
+                    f"{despesa_id}"
+                )
             )
 
             if novo_status != bool(despesa["paga"]):
                 atualizar_status_despesa(
-                    usuario_id,
-                    despesa["id"],
-                    novo_status
+                    usuario_id=usuario_id,
+                    despesa_id=despesa_id,
+                    novo_status=novo_status
                 )
+
                 st.rerun()
 
             if st.button(
                 "🗑️ Excluir despesa",
-                key=f"despesas_del_{usuario_id}_{mes}_{despesa['id']}",
+                key=(
+                    f"despesas_excluir_"
+                    f"{usuario_id}_"
+                    f"{mes}_"
+                    f"{despesa_id}"
+                ),
                 use_container_width=True
             ):
                 deletar_despesa(
-                    usuario_id,
-                    despesa["id"]
+                    usuario_id=usuario_id,
+                    despesa_id=despesa_id
                 )
 
-                st.success("Despesa excluída!")
+                st.success(
+                    "Despesa excluída com sucesso!"
+                )
+
                 st.rerun()
