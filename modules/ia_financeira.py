@@ -1,5 +1,5 @@
 import streamlit as st
-from database.supabase_config import supabase
+from database.neon_config import buscar_todos
 
 
 def fmt_moeda(valor):
@@ -10,11 +10,38 @@ def fmt_moeda(valor):
 
 
 def carregar_dados(usuario_id, mes):
-    receitas = supabase.table("receitas").select("*").eq("usuario_id", usuario_id).eq("mes", mes).execute().data
-    despesas = supabase.table("despesas").select("*").eq("usuario_id", usuario_id).eq("mes", mes).execute().data
-    faturas = supabase.table("faturas").select("*").eq("usuario_id", usuario_id).eq("mes", mes).execute().data
-    metas = supabase.table("metas").select("*").eq("usuario_id", usuario_id).execute().data
-    investimentos = supabase.table("investimentos").select("*").eq("usuario_id", usuario_id).execute().data
+    receitas = buscar_todos("""
+        SELECT *
+        FROM receitas
+        WHERE usuario_id = :usuario_id
+          AND mes = :mes
+    """, {"usuario_id": usuario_id, "mes": mes})
+
+    despesas = buscar_todos("""
+        SELECT *
+        FROM despesas
+        WHERE usuario_id = :usuario_id
+          AND mes = :mes
+    """, {"usuario_id": usuario_id, "mes": mes})
+
+    faturas = buscar_todos("""
+        SELECT *
+        FROM faturas
+        WHERE usuario_id = :usuario_id
+          AND mes = :mes
+    """, {"usuario_id": usuario_id, "mes": mes})
+
+    metas = buscar_todos("""
+        SELECT *
+        FROM metas
+        WHERE usuario_id = :usuario_id
+    """, {"usuario_id": usuario_id})
+
+    investimentos = buscar_todos("""
+        SELECT *
+        FROM investimentos
+        WHERE usuario_id = :usuario_id
+    """, {"usuario_id": usuario_id})
 
     return receitas, despesas, faturas, metas, investimentos
 
@@ -24,14 +51,10 @@ def gerar_insights(usuario_id, mes, renda_manual=0):
 
     total_receitas = sum(float(r["valor"]) for r in receitas if r.get("recebida"))
     receitas_a_receber = sum(float(r["valor"]) for r in receitas if not r.get("recebida"))
-
     despesas_pagas = sum(float(d["valor"]) for d in despesas if d.get("paga"))
     despesas_pendentes = sum(float(d["valor"]) for d in despesas if not d.get("paga"))
-
     faturas_pendentes = sum(float(f["valor"]) for f in faturas if not f.get("paga"))
-
     total_investido = sum(float(i["valor_atual"]) for i in investimentos)
-
     total_metas = sum(float(m["valor_meta"]) for m in metas)
     total_guardado = sum(float(m["valor_atual"]) for m in metas)
 
@@ -62,7 +85,6 @@ def gerar_insights(usuario_id, mes, renda_manual=0):
 
     if total_metas > 0:
         progresso_metas = (total_guardado / total_metas) * 100
-
         insights.append(("🎯 Progresso das metas", f"Você já alcançou {progresso_metas:.1f}% das suas metas financeiras.", "bom"))
 
     if total_investido > 0:
@@ -128,9 +150,7 @@ def tela_ia_financeira(usuario_id, mes, renda_manual=0):
     c3.metric("🔮 Saldo projetado", fmt_moeda(dados["saldo_projetado"]))
 
     st.progress(score / 100)
-
     st.divider()
-
     st.subheader("Insights inteligentes")
 
     for titulo, mensagem, nivel in insights:
