@@ -2,7 +2,6 @@ from modules.ia_financeira import tela_ia_financeira
 from modules.metas import tela_metas
 from modules.investimentos import tela_investimentos
 from modules.exportar import tela_exportar
-from modules.teste_supabase import testar_supabase
 from modules.recorrencias import tela_recorrencias
 from modules.dashboard import tela_dashboard_profissional
 from modules.faturas import tela_faturas
@@ -480,4 +479,4 @@ with aba12:
 with aba13:
     tela_exportar(user_id, mes)
 
-testar_supabase()
+
