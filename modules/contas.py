@@ -1,212 +1,291 @@
 import streamlit as st
-from database.neon_config import executar_sql, buscar_todos
+import pandas as pd
+import plotly.express as px
+from database.neon_config import buscar_todos, buscar_um
 
 
 def fmt_moeda(valor):
-    """Formata valor no padrão brasileiro."""
     try:
         return f"R$ {float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     except Exception:
         return "R$ 0,00"
 
 
-def garantir_tabela_contas():
-    executar_sql("""
-        CREATE TABLE IF NOT EXISTS contas (
-            id BIGSERIAL PRIMARY KEY,
-            usuario_id BIGINT NOT NULL,
-            nome TEXT NOT NULL,
-            tipo TEXT NOT NULL,
-            saldo NUMERIC(15,2) NOT NULL DEFAULT 0,
-            created_at TIMESTAMPTZ DEFAULT NOW()
-        )
-    """)
-
-
-def criar_conta(usuario_id, nome, tipo, saldo):
-    executar_sql("""
-        INSERT INTO contas (
-            usuario_id,
-            nome,
-            tipo,
-            saldo
-        )
-        VALUES (
-            :usuario_id,
-            :nome,
-            :tipo,
-            :saldo
-        )
-    """, {
-        "usuario_id": usuario_id,
-        "nome": nome,
-        "tipo": tipo,
-        "saldo": float(saldo)
-    })
-
-
-def listar_contas(usuario_id):
-    return buscar_todos("""
-        SELECT id, usuario_id, nome, tipo, saldo
+def buscar_resumo(usuario_id, mes):
+    saldo = buscar_um("""
+        SELECT COALESCE(SUM(saldo), 0) AS total
         FROM contas
         WHERE usuario_id = :usuario_id
-        ORDER BY id DESC
     """, {
         "usuario_id": usuario_id
     })
 
-
-def atualizar_conta(conta_id, nome, tipo, saldo):
-    executar_sql("""
-        UPDATE contas
-        SET nome = :nome,
-            tipo = :tipo,
-            saldo = :saldo
-        WHERE id = :conta_id
+    receitas = buscar_todos("""
+        SELECT valor, recebida
+        FROM receitas
+        WHERE usuario_id = :usuario_id
+          AND mes = :mes
     """, {
-        "conta_id": conta_id,
-        "nome": nome,
-        "tipo": tipo,
-        "saldo": float(saldo)
+        "usuario_id": usuario_id,
+        "mes": mes
+    })
+
+    despesas = buscar_todos("""
+        SELECT valor, paga
+        FROM despesas
+        WHERE usuario_id = :usuario_id
+          AND mes = :mes
+    """, {
+        "usuario_id": usuario_id,
+        "mes": mes
+    })
+
+    compras = buscar_todos("""
+        SELECT valor_total
+        FROM compras_cartao
+        WHERE usuario_id = :usuario_id
+          AND mes = :mes
+    """, {
+        "usuario_id": usuario_id,
+        "mes": mes
+    })
+
+    faturas = buscar_todos("""
+        SELECT valor, paga
+        FROM faturas
+        WHERE usuario_id = :usuario_id
+          AND mes = :mes
+    """, {
+        "usuario_id": usuario_id,
+        "mes": mes
+    })
+
+    total_receitas = sum(float(r["valor"]) for r in receitas if r["recebida"])
+    receitas_a_receber = sum(float(r["valor"]) for r in receitas if not r["recebida"])
+    despesas_pagas = sum(float(d["valor"]) for d in despesas if d["paga"])
+    despesas_pendentes = sum(float(d["valor"]) for d in despesas if not d["paga"])
+    total_cartao = sum(float(c["valor_total"]) for c in compras)
+    faturas_pendentes = sum(float(f["valor"]) for f in faturas if not f["paga"])
+    faturas_pagas = sum(float(f["valor"]) for f in faturas if f["paga"])
+
+    return {
+        "saldo_contas": float(saldo["total"] or 0),
+        "total_receitas": total_receitas,
+        "receitas_a_receber": receitas_a_receber,
+        "total_despesas_pagas": despesas_pagas,
+        "total_despesas_pendentes": despesas_pendentes,
+        "total_cartao_mes": total_cartao,
+        "faturas_pendentes": faturas_pendentes,
+        "faturas_pagas": faturas_pagas
+    }
+
+
+def dados_categorias(usuario_id, mes):
+    despesas = buscar_todos("""
+        SELECT categoria, valor
+        FROM despesas
+        WHERE usuario_id = :usuario_id
+          AND mes = :mes
+    """, {
+        "usuario_id": usuario_id,
+        "mes": mes
+    })
+
+    compras = buscar_todos("""
+        SELECT categoria, valor_total
+        FROM compras_cartao
+        WHERE usuario_id = :usuario_id
+          AND mes = :mes
+    """, {
+        "usuario_id": usuario_id,
+        "mes": mes
+    })
+
+    dados = []
+
+    for item in despesas:
+        dados.append({
+            "categoria": item["categoria"],
+            "valor": float(item["valor"]),
+            "tipo": "Despesa"
+        })
+
+    for item in compras:
+        dados.append({
+            "categoria": item["categoria"],
+            "valor": float(item["valor_total"]),
+            "tipo": "Cartão"
+        })
+
+    return pd.DataFrame(dados)
+
+
+def dados_fluxo(usuario_id, mes):
+    resumo = buscar_resumo(usuario_id, mes)
+
+    return pd.DataFrame({
+        "Tipo": [
+            "Receitas recebidas",
+            "Despesas pagas",
+            "Despesas pendentes",
+            "Compras no cartão",
+            "Faturas pendentes"
+        ],
+        "Valor": [
+            resumo["total_receitas"],
+            resumo["total_despesas_pagas"],
+            resumo["total_despesas_pendentes"],
+            resumo["total_cartao_mes"],
+            resumo["faturas_pendentes"]
+        ]
     })
 
 
-def deletar_conta(conta_id):
-    try:
-        executar_sql("""
-            DELETE FROM contas
-            WHERE id = :conta_id
-        """, {
-            "conta_id": conta_id
-        })
+def tela_dashboard_profissional(usuario_id, mes, renda_manual=0, investido=0, privacidade=False):
+    st.markdown("""
+    <style>
+    .dash-title {
+        font-size: 28px;
+        font-weight: 900;
+        color: #f8fafc;
+        margin-bottom: 4px;
+    }
+    .dash-subtitle {
+        color: #94a3b8;
+        margin-bottom: 22px;
+    }
+    .insight-box {
+        background: linear-gradient(135deg, #0f172a, #1e293b);
+        border: 1px solid #334155;
+        border-radius: 18px;
+        padding: 18px;
+        margin-bottom: 18px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-        st.success("✅ Conta excluída com sucesso!")
+    st.markdown('<div class="dash-title">📈 Dashboard Profissional</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="dash-subtitle">Resumo financeiro inteligente de {mes}</div>', unsafe_allow_html=True)
 
-    except Exception:
-        st.error(
-            "❌ Esta conta está vinculada a cartões, receitas ou despesas.\n\n"
-            "Exclua os vínculos primeiro."
-        )
+    resumo = buscar_resumo(usuario_id, mes)
 
+    saldo_projetado = (
+        resumo["saldo_contas"]
+        + resumo["receitas_a_receber"]
+        - resumo["total_despesas_pendentes"]
+        - resumo["faturas_pendentes"]
+    )
 
-def tela_contas(usuario_id):
-    garantir_tabela_contas()
+    resultado_mes = (
+        resumo["total_receitas"]
+        - resumo["total_despesas_pagas"]
+        - resumo["faturas_pagas"]
+        - float(investido or 0)
+    )
 
-    st.subheader("🏦 Contas Financeiras")
+    st.markdown('<div class="insight-box">', unsafe_allow_html=True)
 
-    tipos_conta = [
-        "Conta corrente",
-        "Carteira",
-        "Poupança",
-        "Investimento",
-        "Dinheiro",
-        "Conta digital",
-        "Reserva de emergência"
-    ]
+    if resultado_mes < 0:
+        st.error("⚠️ Atenção: seu resultado do mês está negativo. Revise gastos, faturas e despesas pendentes.")
+    elif resultado_mes == 0:
+        st.warning("⚠️ Seu mês está no zero a zero. Evite novas despesas.")
+    else:
+        st.success("✅ Seu resultado do mês está positivo. Ótimo controle financeiro.")
 
-    with st.expander("➕ Nova conta", expanded=False):
-        with st.form("form_nova_conta", clear_on_submit=True):
-            nome = st.text_input(
-                "Nome da conta",
-                placeholder="Ex: Nubank, Santander, Carteira"
-            )
+    st.markdown('</div>', unsafe_allow_html=True)
 
-            tipo = st.selectbox("Tipo", tipos_conta)
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("🏦 Saldo em contas", "R$ *****" if privacidade else fmt_moeda(resumo["saldo_contas"]))
+    c2.metric("💵 Receitas", "R$ *****" if privacidade else fmt_moeda(resumo["total_receitas"]))
+    c3.metric("💳 Cartão", "R$ *****" if privacidade else fmt_moeda(resumo["total_cartao_mes"]))
+    c4.metric("🧾 Faturas", "R$ *****" if privacidade else fmt_moeda(resumo["faturas_pendentes"]))
 
-            saldo = st.number_input(
-                "Saldo inicial",
-                min_value=0.0,
-                step=100.0,
-                format="%.2f",
-                help="Para trinta mil, digite 30000."
-            )
+    c5, c6, c7, c8 = st.columns(4)
+    c5.metric("✅ Despesas pagas", "R$ *****" if privacidade else fmt_moeda(resumo["total_despesas_pagas"]))
+    c6.metric("⏳ Pendentes", "R$ *****" if privacidade else fmt_moeda(resumo["total_despesas_pendentes"]))
+    c7.metric("📊 Resultado", "R$ *****" if privacidade else fmt_moeda(resultado_mes))
+    c8.metric("🔮 Projetado", "R$ *****" if privacidade else fmt_moeda(saldo_projetado))
 
-            enviar = st.form_submit_button(
-                "Criar conta",
-                use_container_width=True
-            )
-
-            if enviar:
-                if not nome.strip():
-                    st.warning("Informe o nome da conta.")
-                else:
-                    criar_conta(
-                        usuario_id,
-                        nome.strip(),
-                        tipo,
-                        saldo
-                    )
-
-                    st.success("Conta criada com sucesso!")
-                    st.rerun()
-
-    contas = listar_contas(usuario_id)
-
-    if not contas:
-        st.info("Nenhuma conta cadastrada ainda.")
-        return
-
-    saldo_total = sum(float(conta["saldo"]) for conta in contas)
-
-    st.metric("💰 Saldo total em contas", fmt_moeda(saldo_total))
     st.divider()
 
-    cols = st.columns(3)
+    col1, col2 = st.columns(2)
 
-    for i, conta in enumerate(contas):
-        with cols[i % 3]:
-            with st.container(border=True):
-                st.markdown(f"### 💳 {conta['nome']}")
-                st.write(f"**Tipo:** {conta['tipo']}")
-                st.write(f"**Saldo:** {fmt_moeda(conta['saldo'])}")
+    with col1:
+        st.subheader("📊 Fluxo do mês")
+        df_fluxo = dados_fluxo(usuario_id, mes)
+        df_fluxo = df_fluxo[df_fluxo["Valor"] > 0]
 
-                with st.expander("✏️ Editar / Excluir"):
-                    novo_nome = st.text_input(
-                        "Nome",
-                        value=conta["nome"],
-                        key=f"nome_conta_{conta['id']}"
-                    )
+        if df_fluxo.empty or privacidade:
+            st.info("Sem dados suficientes para gerar gráfico.")
+        else:
+            fig = px.bar(
+                df_fluxo,
+                x="Tipo",
+                y="Valor",
+                text_auto=".2s",
+                template="plotly_dark"
+            )
 
-                    novo_tipo = st.selectbox(
-                        "Tipo",
-                        tipos_conta,
-                        index=tipos_conta.index(conta["tipo"])
-                        if conta["tipo"] in tipos_conta else 0,
-                        key=f"tipo_conta_{conta['id']}"
-                    )
+            fig.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font_color="white",
+                xaxis_title="",
+                yaxis_title="Valor",
+                height=380
+            )
 
-                    novo_saldo = st.number_input(
-                        "Saldo",
-                        min_value=0.0,
-                        value=float(conta["saldo"]),
-                        step=100.0,
-                        format="%.2f",
-                        key=f"saldo_conta_{conta['id']}"
-                    )
+            st.plotly_chart(
+                fig,
+                use_container_width=True,
+                key=f"grafico_fluxo_dashboard_{usuario_id}_{mes}"
+            )
 
-                    c1, c2 = st.columns(2)
+    with col2:
+        st.subheader("🍕 Gastos por categoria")
+        df_cat = dados_categorias(usuario_id, mes)
 
-                    if c1.button(
-                        "Salvar",
-                        key=f"salvar_conta_{conta['id']}",
-                        use_container_width=True
-                    ):
-                        if not novo_nome.strip():
-                            st.warning("Informe o nome da conta.")
-                        else:
-                            atualizar_conta(
-                                conta["id"],
-                                novo_nome.strip(),
-                                novo_tipo,
-                                novo_saldo
-                            )
-                            st.success("Conta atualizada!")
-                            st.rerun()
+        if df_cat.empty or privacidade:
+            st.info("Sem dados suficientes para gerar gráfico.")
+        else:
+            cat = df_cat.groupby("categoria", as_index=False)["valor"].sum()
 
-                    if c2.button(
-                        "Excluir",
-                        key=f"excluir_conta_{conta['id']}",
-                        use_container_width=True
-                    ):
-                        deletar_conta(conta["id"])
-                        st.rerun()
+            fig2 = px.pie(
+                cat,
+                values="valor",
+                names="categoria",
+                hole=0.55,
+                template="plotly_dark"
+            )
+
+            fig2.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font_color="white",
+                margin=dict(t=10, b=10, l=10, r=10),
+                height=380
+            )
+
+            st.plotly_chart(
+                fig2,
+                use_container_width=True,
+                key=f"grafico_categorias_dashboard_{usuario_id}_{mes}"
+            )
+
+    st.divider()
+    st.subheader("🤖 Resumo inteligente")
+
+    if resumo["faturas_pendentes"] > 0:
+        st.warning(f"Você tem {fmt_moeda(resumo['faturas_pendentes'])} em faturas pendentes neste mês.")
+
+    if resumo["total_despesas_pendentes"] > 0:
+        st.warning(f"Você tem {fmt_moeda(resumo['total_despesas_pendentes'])} em despesas pendentes.")
+
+    if resumo["receitas_a_receber"] > 0:
+        st.info(f"Você ainda tem {fmt_moeda(resumo['receitas_a_receber'])} para receber neste mês.")
+
+    if saldo_projetado < 0:
+        st.error("Seu saldo projetado está negativo. Revise despesas, faturas e gastos no cartão.")
+    else:
+        st.success("Seu saldo projetado está positivo considerando pendências e valores a receber.")
