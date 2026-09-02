@@ -5,24 +5,45 @@ DATABASE_URL = st.secrets["DATABASE_URL"]
 
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True
+    pool_pre_ping=True,
+    pool_recycle=300
 )
 
-def testar_conexao():
-    try:
-        with engine.connect() as conexao:
-            resultado = conexao.execute(
-                text("SELECT current_database(), current_user")
-            ).fetchone()
 
-            return {
-                "sucesso": True,
-                "banco": resultado[0],
-                "usuario": resultado[1]
-            }
+def executar_sql(sql, parametros=None):
+    parametros = parametros or {}
 
-    except Exception as erro:
-        return {
-            "sucesso": False,
-            "erro": str(erro)
-        }
+    with engine.begin() as conexao:
+        resultado = conexao.execute(
+            text(sql),
+            parametros
+        )
+
+        return resultado
+
+
+def buscar_todos(sql, parametros=None):
+    parametros = parametros or {}
+
+    with engine.connect() as conexao:
+        resultado = conexao.execute(
+            text(sql),
+            parametros
+        )
+
+        return [dict(linha._mapping) for linha in resultado]
+
+
+def buscar_um(sql, parametros=None):
+    parametros = parametros or {}
+
+    with engine.connect() as conexao:
+        resultado = conexao.execute(
+            text(sql),
+            parametros
+        ).fetchone()
+
+        if resultado:
+            return dict(resultado._mapping)
+
+        return None
