@@ -282,11 +282,11 @@ def tela_despesas(usuario_id, mes):
             st.write(f"**Vencimento:** {despesa['vencimento']}")
             st.write(f"**Status:** {status}")
 
-            novo_status = st.checkbox(
-                "Marcar como paga",
-                value=bool(despesa["paga"]),
-                key=f"status_{despesa['id']}"
-            )
+           novo_status = st.checkbox(
+            "Marcar como paga",
+            value=bool(despesa["paga"]),
+            key=f"despesas_status_{usuario_id}_{mes}_{despesa['id']}"
+        )
 
             if novo_status != bool(despesa["paga"]):
                 atualizar_status_despesa(
