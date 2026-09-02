@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
-from database.supabase_config import supabase
+from database.neon_config import buscar_todos
 
 from reportlab.platypus import (
     SimpleDocTemplate,
@@ -19,30 +19,49 @@ import matplotlib.pyplot as plt
 
 
 def gerar_excel(usuario_id, mes):
-
-    tabelas = [
-        "contas",
-        "receitas",
-        "despesas",
-        "compras_cartao",
-        "faturas"
-    ]
+    consultas = {
+        "contas": """
+            SELECT *
+            FROM contas
+            WHERE usuario_id = :usuario_id
+        """,
+        "receitas": """
+            SELECT *
+            FROM receitas
+            WHERE usuario_id = :usuario_id
+              AND mes = :mes
+        """,
+        "despesas": """
+            SELECT *
+            FROM despesas
+            WHERE usuario_id = :usuario_id
+              AND mes = :mes
+        """,
+        "compras_cartao": """
+            SELECT *
+            FROM compras_cartao
+            WHERE usuario_id = :usuario_id
+              AND mes = :mes
+        """,
+        "faturas": """
+            SELECT *
+            FROM faturas
+            WHERE usuario_id = :usuario_id
+              AND mes = :mes
+        """
+    }
 
     output = BytesIO()
 
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        for tabela, sql in consultas.items():
+            parametros = {"usuario_id": usuario_id}
 
-        for tabela in tabelas:
+            if ":mes" in sql:
+                parametros["mes"] = mes
 
-            resposta = supabase.table(tabela) \
-                .select("*") \
-                .eq("usuario_id", usuario_id) \
-                .execute()
-
-            df = pd.DataFrame(resposta.data)
-
-            if not df.empty and "mes" in df.columns:
-                df = df[df["mes"] == mes]
+            dados = buscar_todos(sql, parametros)
+            df = pd.DataFrame(dados)
 
             df.to_excel(
                 writer,
@@ -51,44 +70,34 @@ def gerar_excel(usuario_id, mes):
             )
 
     output.seek(0)
-
     return output
 
 
 def buscar_dados(usuario_id, mes):
+    receitas = buscar_todos("""
+        SELECT valor
+        FROM receitas
+        WHERE usuario_id = :usuario_id
+          AND mes = :mes
+    """, {"usuario_id": usuario_id, "mes": mes})
 
-    receitas = supabase.table("receitas") \
-        .select("*") \
-        .eq("usuario_id", usuario_id) \
-        .eq("mes", mes) \
-        .execute()
+    despesas = buscar_todos("""
+        SELECT valor
+        FROM despesas
+        WHERE usuario_id = :usuario_id
+          AND mes = :mes
+    """, {"usuario_id": usuario_id, "mes": mes})
 
-    despesas = supabase.table("despesas") \
-        .select("*") \
-        .eq("usuario_id", usuario_id) \
-        .eq("mes", mes) \
-        .execute()
+    faturas = buscar_todos("""
+        SELECT valor
+        FROM faturas
+        WHERE usuario_id = :usuario_id
+          AND mes = :mes
+    """, {"usuario_id": usuario_id, "mes": mes})
 
-    faturas = supabase.table("faturas") \
-        .select("*") \
-        .eq("usuario_id", usuario_id) \
-        .eq("mes", mes) \
-        .execute()
-
-    total_receitas = sum(
-        float(r["valor"])
-        for r in receitas.data
-    )
-
-    total_despesas = sum(
-        float(d["valor"])
-        for d in despesas.data
-    )
-
-    total_faturas = sum(
-        float(f["valor"])
-        for f in faturas.data
-    )
+    total_receitas = sum(float(r["valor"]) for r in receitas)
+    total_despesas = sum(float(d["valor"]) for d in despesas)
+    total_faturas = sum(float(f["valor"]) for f in faturas)
 
     saldo = total_receitas - total_despesas - total_faturas
 
@@ -101,7 +110,6 @@ def buscar_dados(usuario_id, mes):
 
 
 def gerar_grafico(dados):
-
     fig, ax = plt.subplots(figsize=(7, 4))
 
     categorias = [
@@ -154,15 +162,13 @@ def gerar_grafico(dados):
     )
 
     plt.close(fig)
-
     img.seek(0)
 
     return img
 
 
 def gerar_pdf(usuario_id, mes):
-
-    from reportlab.platypus import Image, PageBreak
+    from reportlab.platypus import Image
     from reportlab.lib.enums import TA_CENTER
     from reportlab.lib.styles import ParagraphStyle
 
@@ -277,12 +283,10 @@ def gerar_pdf(usuario_id, mes):
     doc.build(elementos)
 
     buffer.seek(0)
-
     return buffer
 
 
 def tela_exportar(usuario_id, mes):
-
     st.subheader("📤 Exportar relatórios")
 
     st.info(
@@ -292,7 +296,6 @@ def tela_exportar(usuario_id, mes):
     col1, col2 = st.columns(2)
 
     with col1:
-
         arquivo_excel = gerar_excel(usuario_id, mes)
 
         st.download_button(
@@ -304,7 +307,6 @@ def tela_exportar(usuario_id, mes):
         )
 
     with col2:
-
         arquivo_pdf = gerar_pdf(usuario_id, mes)
 
         st.download_button(
