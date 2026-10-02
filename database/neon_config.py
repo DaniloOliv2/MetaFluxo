@@ -1,4 +1,5 @@
 import streamlit as st
+from contextlib import contextmanager
 from sqlalchemy import create_engine, text
 
 DATABASE_URL = st.secrets["DATABASE_URL"]
@@ -17,40 +18,43 @@ engine = create_engine(
 )
 
 
-def executar_sql(sql, parametros=None):
-    parametros = parametros or {}
-
+@contextmanager
+def transacao():
+    """Executa várias operações SQL na mesma transação."""
     with engine.begin() as conexao:
-        resultado = conexao.execute(
-            text(sql),
-            parametros
-        )
-
-        return resultado
+        yield conexao
 
 
-def buscar_todos(sql, parametros=None):
+def executar_sql(sql, parametros=None, conexao=None):
     parametros = parametros or {}
 
-    with engine.connect() as conexao:
-        resultado = conexao.execute(
-            text(sql),
-            parametros
-        )
+    if conexao is not None:
+        return conexao.execute(text(sql), parametros)
 
+    with engine.begin() as nova_conexao:
+        resultado = nova_conexao.execute(text(sql), parametros)
+        return resultado.rowcount
+
+
+def buscar_todos(sql, parametros=None, conexao=None):
+    parametros = parametros or {}
+
+    if conexao is not None:
+        resultado = conexao.execute(text(sql), parametros)
+        return [dict(linha._mapping) for linha in resultado]
+
+    with engine.connect() as nova_conexao:
+        resultado = nova_conexao.execute(text(sql), parametros)
         return [dict(linha._mapping) for linha in resultado]
 
 
-def buscar_um(sql, parametros=None):
+def buscar_um(sql, parametros=None, conexao=None):
     parametros = parametros or {}
 
-    with engine.connect() as conexao:
-        resultado = conexao.execute(
-            text(sql),
-            parametros
-        ).fetchone()
+    if conexao is not None:
+        resultado = conexao.execute(text(sql), parametros).fetchone()
+    else:
+        with engine.connect() as nova_conexao:
+            resultado = nova_conexao.execute(text(sql), parametros).fetchone()
 
-        if resultado:
-            return dict(resultado._mapping)
-
-        return None
+    return dict(resultado._mapping) if resultado else None
