@@ -1002,7 +1002,7 @@ with aba1:
 
     col_info.caption(
         "Edite os campos e marque como pago. "
-        "As alterações são salvas automaticamente."
+        "Clique em Salvar para registrar as alterações."
     )
 
     if not gastos:
@@ -1052,38 +1052,58 @@ with aba1:
                 key=f"lanc_pago_{user_id}_{mes}_{gasto_id}"
             )
 
-            if d.button(
-                "Salvar",
-                key=f"lanc_salvar_{user_id}_{mes}_{gasto_id}",
-                disabled=privacidade
-            ):
-                try:
-                    valor = interpretar_reais(valor_texto)
-                    if valor < 0:
-                        raise ValueError("O valor não pode ser negativo.")
-                    atualizar_gasto(
-                        gasto_id=gasto_id,
-                        user_id=user_id,
-                        item=item,
-                        categoria=categoria,
-                        valor=valor,
-                        pago=pago
-                    )
-                    st.success("Lançamento salvo!")
-                    st.rerun()
-                except ValueError as erro:
-                    st.error(str(erro))
-
-            if e.button(
-                "🗑️",
-                key=f"lanc_excluir_{user_id}_{mes}_{gasto_id}"
-            ):
-                deletar_gasto(
-                    gasto_id,
-                    user_id
+            chave_confirmacao = f"confirmar_exclusao_lanc_{user_id}_{mes}_{gasto_id}"
+            if st.session_state.get(chave_confirmacao, False):
+                st.warning(
+                    f"Tem certeza de que deseja excluir o lançamento '{gasto['item']}'?"
                 )
+                confirmar, cancelar = st.columns(2)
+                if confirmar.button(
+                    "Confirmar exclusão",
+                    key=f"lanc_confirmar_{user_id}_{mes}_{gasto_id}",
+                    use_container_width=True,
+                ):
+                    deletar_gasto(gasto_id, user_id)
+                    st.session_state[chave_confirmacao] = False
+                    st.rerun()
+                if cancelar.button(
+                    "Cancelar",
+                    key=f"lanc_cancelar_{user_id}_{mes}_{gasto_id}",
+                    use_container_width=True,
+                ):
+                    st.session_state[chave_confirmacao] = False
+                    st.rerun()
+            else:
+                if d.button(
+                    "Salvar",
+                    key=f"lanc_salvar_{user_id}_{mes}_{gasto_id}",
+                    disabled=privacidade,
+                ):
+                    try:
+                        valor = interpretar_reais(valor_texto)
+                        if valor < 0:
+                            raise ValueError("O valor não pode ser negativo.")
+                        atualizar_gasto(
+                            gasto_id=gasto_id,
+                            user_id=user_id,
+                            item=item,
+                            categoria=categoria,
+                            valor=valor,
+                            pago=pago,
+                        )
+                        st.success("Lançamento salvo!")
+                        st.rerun()
+                    except ValueError as erro:
+                        st.error(str(erro))
 
-                st.rerun()
+                if e.button(
+                    "🗑️ Excluir",
+                    key=f"lanc_excluir_{user_id}_{mes}_{gasto_id}",
+                    use_container_width=True,
+                ):
+                    st.session_state[chave_confirmacao] = True
+                    st.rerun()
+
 
 
 # =========================================================
