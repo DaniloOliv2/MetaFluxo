@@ -1,5 +1,22 @@
 import streamlit as st
+import re
+from decimal import Decimal, InvalidOperation
 from database.neon_config import executar_sql, buscar_todos
+
+
+def interpretar_reais(texto):
+    """Aceita 1000, 1000,00 e 1.000,00, sem ambiguidades."""
+    texto = str(texto).strip().replace("R$", "").strip()
+    if not re.fullmatch(r"-?(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d{1,2})?", texto):
+        raise ValueError("Use o formato brasileiro, por exemplo: 1.000,00")
+    try:
+        return Decimal(texto.replace(".", "").replace(",", "."))
+    except InvalidOperation as erro:
+        raise ValueError("Valor inválido.") from erro
+
+
+def texto_reais(valor):
+    return f"{Decimal(str(valor)):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
 def fmt_moeda(valor):
@@ -113,11 +130,10 @@ def tela_contas(usuario_id):
 
             tipo = st.selectbox("Tipo", tipos_conta)
 
-            saldo = st.number_input(
-                "Saldo inicial",
-                step=100.0,
-                format="%.2f",
-                help="Para trinta mil, digite 30000."
+            saldo_texto = st.text_input(
+                "Saldo inicial (R$)",
+                value="0,00",
+                help="Exemplo: 1.000,00"
             )
 
             enviar = st.form_submit_button(
@@ -129,15 +145,14 @@ def tela_contas(usuario_id):
                 if not nome.strip():
                     st.warning("Informe o nome da conta.")
                 else:
-                    criar_conta(
-                        usuario_id,
-                        nome.strip(),
-                        tipo,
-                        saldo
-                    )
-
-                    st.success("Conta criada com sucesso!")
-                    st.rerun()
+                    try:
+                        saldo = interpretar_reais(saldo_texto)
+                        criar_conta(usuario_id, nome.strip(), tipo, saldo)
+                    except ValueError as erro:
+                        st.error(str(erro))
+                    else:
+                        st.success("Conta criada com sucesso!")
+                        st.rerun()
 
     contas = listar_contas(usuario_id)
 
@@ -174,12 +189,10 @@ def tela_contas(usuario_id):
                         key=f"tipo_conta_{conta['id']}"
                     )
 
-                    novo_saldo = st.number_input(
-                        "Saldo",
-                        value=float(conta["saldo"]),
-                        step=100.0,
-                        format="%.2f",
-                        key=f"saldo_conta_{conta['id']}"
+                    novo_saldo_texto = st.text_input(
+                        "Saldo (R$)",
+                        value=texto_reais(conta["saldo"]),
+                        key=f"saldo_conta_br_{conta['id']}"
                     )
 
                     c1, c2 = st.columns(2)
@@ -192,14 +205,16 @@ def tela_contas(usuario_id):
                         if not novo_nome.strip():
                             st.warning("Informe o nome da conta.")
                         else:
-                            atualizar_conta(
-                                conta["id"],
-                                novo_nome.strip(),
-                                novo_tipo,
-                                novo_saldo
-                            )
-                            st.success("Conta atualizada!")
-                            st.rerun()
+                            try:
+                                novo_saldo = interpretar_reais(novo_saldo_texto)
+                                atualizar_conta(
+                                    conta["id"], novo_nome.strip(), novo_tipo, novo_saldo
+                                )
+                            except ValueError as erro:
+                                st.error(str(erro))
+                            else:
+                                st.success("Conta atualizada!")
+                                st.rerun()
 
                     if c2.button(
                         "Excluir",
