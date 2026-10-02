@@ -1,5 +1,5 @@
 import streamlit as st
-from database.neon_config import executar_sql, buscar_todos, buscar_um
+from database.neon_config import executar_sql, buscar_todos, buscar_um, transacao
 
 
 def fmt_moeda(valor):
@@ -42,65 +42,43 @@ def listar_contas(usuario_id):
     })
 
 
-def criar_despesa(
-    usuario_id,
-    mes,
-    descricao,
-    categoria,
-    conta_id,
-    valor,
-    paga,
-    vencimento,
-    recorrente
-):
-    executar_sql("""
-        INSERT INTO despesas (
-            usuario_id,
-            mes,
-            descricao,
-            categoria,
-            conta_id,
-            valor,
-            paga,
-            vencimento,
-            recorrente
-        )
-        VALUES (
-            :usuario_id,
-            :mes,
-            :descricao,
-            :categoria,
-            :conta_id,
-            :valor,
-            :paga,
-            :vencimento,
-            :recorrente
-        )
-    """, {
-        "usuario_id": usuario_id,
-        "mes": mes,
-        "descricao": descricao,
-        "categoria": categoria,
-        "conta_id": conta_id,
-        "valor": float(valor),
-        "paga": bool(paga),
-        "vencimento": vencimento,
-        "recorrente": bool(recorrente)
-    })
+def criar_despesa(usuario_id, mes, descricao, categoria, conta_id, valor,
+                  paga, vencimento, recorrente):
+    with transacao() as conexao:
+        if paga and conta_id:
+            conta = buscar_um("""
+                SELECT id FROM contas
+                WHERE id = :conta_id AND usuario_id = :usuario_id
+                FOR UPDATE
+            """, {"conta_id": conta_id, "usuario_id": usuario_id},
+                conexao=conexao)
+            if not conta:
+                raise ValueError("A conta selecionada não foi encontrada.")
 
-    # Se a despesa já foi cadastrada como paga,
-    # desconta o valor da conta.
-    if paga and conta_id:
         executar_sql("""
-            UPDATE contas
-            SET saldo = saldo - :valor
-            WHERE id = :conta_id
-              AND usuario_id = :usuario_id
+            INSERT INTO despesas (
+                usuario_id, mes, descricao, categoria, conta_id, valor,
+                paga, vencimento, recorrente
+            ) VALUES (
+                :usuario_id, :mes, :descricao, :categoria, :conta_id,
+                :valor, :paga, :vencimento, :recorrente
+            )
         """, {
-            "valor": float(valor),
-            "conta_id": conta_id,
-            "usuario_id": usuario_id
-        })
+            "usuario_id": usuario_id, "mes": mes,
+            "descricao": descricao, "categoria": categoria,
+            "conta_id": conta_id, "valor": str(valor),
+            "paga": bool(paga), "vencimento": vencimento,
+            "recorrente": bool(recorrente)
+        }, conexao=conexao)
+
+        if paga and conta_id:
+            executar_sql("""
+                UPDATE contas SET saldo = saldo - :valor
+                WHERE id = :conta_id AND usuario_id = :usuario_id
+            """, {
+                "valor": str(valor), "conta_id": conta_id,
+                "usuario_id": usuario_id
+            }, conexao=conexao)
 
 
 def listar_despesas(usuario_id, mes):
@@ -131,105 +109,68 @@ def listar_despesas(usuario_id, mes):
 
 
 def atualizar_status_despesa(usuario_id, despesa_id, novo_status):
-    despesa = buscar_um("""
-        SELECT id, usuario_id, conta_id, valor, paga
-        FROM despesas
-        WHERE id = :despesa_id
-          AND usuario_id = :usuario_id
-    """, {
-        "despesa_id": despesa_id,
-        "usuario_id": usuario_id
-    })
-
-    if not despesa:
-        return
-
-    status_atual = bool(despesa["paga"])
-    novo_status = bool(novo_status)
-
-    # Não faz nada se o status não mudou.
-    if status_atual == novo_status:
-        return
-
-    valor = float(despesa["valor"])
-    conta_id = despesa["conta_id"]
-
-    # Se passou de pendente para paga:
-    # desconta da conta.
-    if conta_id and novo_status:
-        executar_sql("""
-            UPDATE contas
-            SET saldo = saldo - :valor
-            WHERE id = :conta_id
-              AND usuario_id = :usuario_id
+    with transacao() as conexao:
+        despesa = buscar_um("""
+            SELECT id, conta_id, valor, paga FROM despesas
+            WHERE id = :despesa_id AND usuario_id = :usuario_id
+            FOR UPDATE
         """, {
-            "valor": valor,
-            "conta_id": conta_id,
-            "usuario_id": usuario_id
-        })
+            "despesa_id": despesa_id, "usuario_id": usuario_id
+        }, conexao=conexao)
+        if not despesa or bool(despesa["paga"]) == bool(novo_status):
+            return
 
-    # Se passou de paga para pendente:
-    # devolve o valor para a conta.
-    elif conta_id and not novo_status:
+        if despesa["conta_id"]:
+            ajuste = -despesa["valor"] if novo_status else despesa["valor"]
+            resultado = executar_sql("""
+                UPDATE contas SET saldo = saldo + :ajuste
+                WHERE id = :conta_id AND usuario_id = :usuario_id
+            """, {
+                "ajuste": ajuste, "conta_id": despesa["conta_id"],
+                "usuario_id": usuario_id
+            }, conexao=conexao)
+            if resultado.rowcount != 1:
+                raise ValueError("A conta vinculada não foi encontrada.")
+
         executar_sql("""
-            UPDATE contas
-            SET saldo = saldo + :valor
-            WHERE id = :conta_id
-              AND usuario_id = :usuario_id
+            UPDATE despesas SET paga = :paga
+            WHERE id = :despesa_id AND usuario_id = :usuario_id
         """, {
-            "valor": valor,
-            "conta_id": conta_id,
+            "paga": bool(novo_status), "despesa_id": despesa_id,
             "usuario_id": usuario_id
-        })
-
-    executar_sql("""
-        UPDATE despesas
-        SET paga = :paga
-        WHERE id = :despesa_id
-          AND usuario_id = :usuario_id
-    """, {
-        "paga": novo_status,
-        "despesa_id": despesa_id,
-        "usuario_id": usuario_id
-    })
+        }, conexao=conexao)
 
 
 def deletar_despesa(usuario_id, despesa_id):
-    despesa = buscar_um("""
-        SELECT id, usuario_id, conta_id, valor, paga
-        FROM despesas
-        WHERE id = :despesa_id
-          AND usuario_id = :usuario_id
-    """, {
-        "despesa_id": despesa_id,
-        "usuario_id": usuario_id
-    })
-
-    if not despesa:
-        return
-
-    # Se a despesa estava paga, o dinheiro havia sido
-    # descontado da conta. Ao excluir, devolvemos o valor.
-    if despesa["paga"] and despesa["conta_id"]:
-        executar_sql("""
-            UPDATE contas
-            SET saldo = saldo + :valor
-            WHERE id = :conta_id
-              AND usuario_id = :usuario_id
+    with transacao() as conexao:
+        despesa = buscar_um("""
+            SELECT id, conta_id, valor, paga FROM despesas
+            WHERE id = :despesa_id AND usuario_id = :usuario_id
+            FOR UPDATE
         """, {
-            "valor": float(despesa["valor"]),
-            "conta_id": despesa["conta_id"],
-            "usuario_id": usuario_id
-        })
+            "despesa_id": despesa_id, "usuario_id": usuario_id
+        }, conexao=conexao)
+        if not despesa:
+            return
 
-    executar_sql("""
-        DELETE FROM despesas
-        WHERE id = :despesa_id
-          AND usuario_id = :usuario_id
-    """, {
-        "despesa_id": despesa_id,
-        "usuario_id": usuario_id
-    })
+        if despesa["paga"] and despesa["conta_id"]:
+            resultado = executar_sql("""
+                UPDATE contas SET saldo = saldo + :valor
+                WHERE id = :conta_id AND usuario_id = :usuario_id
+            """, {
+                "valor": despesa["valor"],
+                "conta_id": despesa["conta_id"],
+                "usuario_id": usuario_id
+            }, conexao=conexao)
+            if resultado.rowcount != 1:
+                raise ValueError("A conta vinculada não foi encontrada.")
+
+        executar_sql("""
+            DELETE FROM despesas
+            WHERE id = :despesa_id AND usuario_id = :usuario_id
+        """, {
+            "despesa_id": despesa_id, "usuario_id": usuario_id
+        }, conexao=conexao)
 
 
 def tela_despesas(usuario_id, mes):
