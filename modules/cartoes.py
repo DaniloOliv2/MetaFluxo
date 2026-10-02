@@ -1,6 +1,7 @@
 import streamlit as st
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
+from sqlalchemy import text
 from database.neon_config import executar_sql, buscar_todos, buscar_um, transacao
 
 
@@ -193,7 +194,8 @@ def criar_compra(usuario_id, cartao_id, descricao, categoria, valor_total, parce
         mes_inicial = calcular_mes_fatura(cartao["fechamento"])
         # Distribui os centavos restantes sem perder o valor total da compra.
         centavos = int(total * 100)
-        base_centavos, restantes = divmod(centavos, quantidade)
+        base_centavos = centavos // quantidade
+        restantes = centavos % quantidade
         compra_pai_id = None
 
         for numero in range(1, quantidade + 1):
@@ -214,7 +216,7 @@ def criar_compra(usuario_id, cartao_id, descricao, categoria, valor_total, parce
                     f"A fatura de {mes_parcela} já foi paga. Não é possível alterar esse mês."
                 )
 
-            resultado = executar_sql("""
+            resultado = conexao.execute(text("""
                 INSERT INTO compras_cartao (
                     usuario_id, cartao_id, mes, descricao, categoria,
                     valor_total, parcelas, parcela_atual, valor_parcela,
@@ -224,14 +226,14 @@ def criar_compra(usuario_id, cartao_id, descricao, categoria, valor_total, parce
                     :valor_total, :parcelas, :parcela_atual, :valor_parcela,
                     :compra_pai_id, FALSE
                 ) RETURNING id
-            """, {
+            """), {
                 "usuario_id": usuario_id, "cartao_id": cartao_id,
                 "mes": mes_parcela, "descricao": descricao,
                 "categoria": categoria, "valor_total": str(total),
                 "parcelas": quantidade, "parcela_atual": numero,
                 "valor_parcela": str(valor_parcela),
                 "compra_pai_id": compra_pai_id
-            }, conexao=conexao)
+            })
             novo_id = resultado.scalar_one()
             if compra_pai_id is None:
                 compra_pai_id = novo_id
