@@ -299,7 +299,7 @@ def deletar_compra(usuario_id, compra_id):
 
 def total_usado_cartao(usuario_id, cartao_id):
     resultado = buscar_um("""
-        SELECT COALESCE(SUM(valor_total), 0) AS total
+        SELECT COALESCE(SUM(valor_parcela), 0) AS total
         FROM compras_cartao
         WHERE usuario_id = :usuario_id
           AND cartao_id = :cartao_id
