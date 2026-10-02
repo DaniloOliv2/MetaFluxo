@@ -88,13 +88,14 @@ def atualizar_conta(conta_id, nome, tipo, saldo):
     })
 
 
-def deletar_conta(conta_id):
+def deletar_conta(conta_id, usuario_id):
     try:
         executar_sql("""
             DELETE FROM contas
-            WHERE id = :conta_id
+            WHERE id = :conta_id AND usuario_id = :usuario_id
         """, {
-            "conta_id": conta_id
+            "conta_id": conta_id,
+            "usuario_id": usuario_id
         })
 
         st.success("✅ Conta excluída com sucesso!")
@@ -221,5 +222,23 @@ def tela_contas(usuario_id):
                         key=f"excluir_conta_{conta['id']}",
                         use_container_width=True
                     ):
-                        deletar_conta(conta["id"])
-                        st.rerun()
+                        st.session_state[f"confirmar_exclusao_conta_{conta['id']}"] = True
+
+                    if st.session_state.get(f"confirmar_exclusao_conta_{conta['id']}", False):
+                        st.warning(f"Tem certeza de que deseja excluir a conta '{conta['nome']}'?")
+                        confirmar, cancelar = st.columns(2)
+                        if confirmar.button(
+                            "Confirmar exclusão",
+                            key=f"confirmar_conta_{conta['id']}",
+                            use_container_width=True,
+                        ):
+                            deletar_conta(conta["id"], usuario_id)
+                            st.session_state[f"confirmar_exclusao_conta_{conta['id']}"] = False
+                            st.rerun()
+                        if cancelar.button(
+                            "Cancelar",
+                            key=f"cancelar_conta_{conta['id']}",
+                            use_container_width=True,
+                        ):
+                            st.session_state[f"confirmar_exclusao_conta_{conta['id']}"] = False
+                            st.rerun()
