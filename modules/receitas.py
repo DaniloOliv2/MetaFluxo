@@ -1,5 +1,5 @@
 import streamlit as st
-from database.neon_config import executar_sql, buscar_todos, buscar_um
+from database.neon_config import executar_sql, buscar_todos, buscar_um, transacao
 
 
 def fmt_moeda(valor):
@@ -41,34 +41,39 @@ def listar_contas(usuario_id):
 
 
 def criar_receita(usuario_id, mes, descricao, categoria, conta_id, valor, recebida=True):
-    executar_sql("""
-        INSERT INTO receitas (
-            usuario_id, mes, descricao, categoria, conta_id, valor, recebida
-        )
-        VALUES (
-            :usuario_id, :mes, :descricao, :categoria, :conta_id, :valor, :recebida
-        )
-    """, {
-        "usuario_id": usuario_id,
-        "mes": mes,
-        "descricao": descricao,
-        "categoria": categoria,
-        "conta_id": conta_id,
-        "valor": float(valor),
-        "recebida": bool(recebida)
-    })
+    # O cadastro e o crédito no saldo precisam ocorrer juntos.
+    with transacao() as conexao:
+        if recebida and conta_id:
+            conta = buscar_um("""
+                SELECT id FROM contas
+                WHERE id = :conta_id AND usuario_id = :usuario_id
+                FOR UPDATE
+            """, {"conta_id": conta_id, "usuario_id": usuario_id},
+                conexao=conexao)
+            if not conta:
+                raise ValueError("A conta selecionada não foi encontrada.")
 
-    if recebida and conta_id:
         executar_sql("""
-            UPDATE contas
-            SET saldo = saldo + :valor
-            WHERE id = :conta_id
-              AND usuario_id = :usuario_id
+            INSERT INTO receitas (
+                usuario_id, mes, descricao, categoria, conta_id, valor, recebida
+            ) VALUES (
+                :usuario_id, :mes, :descricao, :categoria, :conta_id, :valor, :recebida
+            )
         """, {
-            "valor": float(valor),
-            "conta_id": conta_id,
-            "usuario_id": usuario_id
-        })
+            "usuario_id": usuario_id, "mes": mes,
+            "descricao": descricao, "categoria": categoria,
+            "conta_id": conta_id, "valor": str(valor),
+            "recebida": bool(recebida)
+        }, conexao=conexao)
+
+        if recebida and conta_id:
+            executar_sql("""
+                UPDATE contas SET saldo = saldo + :valor
+                WHERE id = :conta_id AND usuario_id = :usuario_id
+            """, {
+                "valor": str(valor), "conta_id": conta_id,
+                "usuario_id": usuario_id
+            }, conexao=conexao)
 
 
 def listar_receitas(usuario_id, mes):
@@ -100,39 +105,34 @@ def buscar_nome_conta(conta_id):
 
 
 def deletar_receita(usuario_id, receita_id):
-    receita = buscar_um("""
-        SELECT *
-        FROM receitas
-        WHERE id = :receita_id
-          AND usuario_id = :usuario_id
-    """, {
-        "receita_id": receita_id,
-        "usuario_id": usuario_id
-    })
-
-    if not receita:
-        return
-
-    if receita["recebida"] and receita["conta_id"]:
-        executar_sql("""
-            UPDATE contas
-            SET saldo = saldo - :valor
-            WHERE id = :conta_id
-              AND usuario_id = :usuario_id
+    with transacao() as conexao:
+        receita = buscar_um("""
+            SELECT id, conta_id, valor, recebida FROM receitas
+            WHERE id = :receita_id AND usuario_id = :usuario_id
+            FOR UPDATE
         """, {
-            "valor": float(receita["valor"]),
-            "conta_id": receita["conta_id"],
-            "usuario_id": usuario_id
-        })
+            "receita_id": receita_id, "usuario_id": usuario_id
+        }, conexao=conexao)
 
-    executar_sql("""
-        DELETE FROM receitas
-        WHERE id = :receita_id
-          AND usuario_id = :usuario_id
-    """, {
-        "receita_id": receita_id,
-        "usuario_id": usuario_id
-    })
+        if not receita:
+            return
+
+        if receita["recebida"] and receita["conta_id"]:
+            executar_sql("""
+                UPDATE contas SET saldo = saldo - :valor
+                WHERE id = :conta_id AND usuario_id = :usuario_id
+            """, {
+                "valor": receita["valor"],
+                "conta_id": receita["conta_id"],
+                "usuario_id": usuario_id
+            }, conexao=conexao)
+
+        executar_sql("""
+            DELETE FROM receitas
+            WHERE id = :receita_id AND usuario_id = :usuario_id
+        """, {
+            "receita_id": receita_id, "usuario_id": usuario_id
+        }, conexao=conexao)
 
 
 def tela_receitas(usuario_id, mes):
