@@ -1,5 +1,28 @@
 import streamlit as st
+from datetime import datetime
 from database.neon_config import executar_sql, buscar_todos, buscar_um, transacao
+
+
+MESES_PT = (
+    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+)
+
+
+def normalizar_mes_fatura(mes):
+    """Converte o mês do seletor (Novembro) para o formato do banco (AAAA-MM)."""
+    mes_texto = str(mes).strip()
+    if len(mes_texto) == 7 and mes_texto[4] == "-":
+        try:
+            ano, numero = map(int, mes_texto.split("-"))
+            if 1 <= numero <= 12 and 1 <= ano <= 9999:
+                return f"{ano:04d}-{numero:02d}"
+        except ValueError:
+            pass
+    for numero, nome in enumerate(MESES_PT, start=1):
+        if mes_texto.casefold() == nome.casefold():
+            return f"{datetime.now().year}-{numero:02d}"
+    raise ValueError(f"Mês inválido: {mes_texto}")
 
 
 def fmt_moeda(valor):
@@ -203,9 +226,11 @@ def listar_compras_fatura(usuario_id, cartao_id, mes):
 
 
 def tela_faturas(usuario_id, mes):
+    mes = normalizar_mes_fatura(mes)
     garantir_tabela_faturas()
 
     st.subheader("🧾 Faturas do Cartão")
+    st.caption(f"Competência: {mes}")
 
     cartoes = listar_cartoes(usuario_id)
 
@@ -253,7 +278,7 @@ def tela_faturas(usuario_id, mes):
 
             col1, col2 = st.columns(2)
 
-            if fatura and not fatura["paga"]:
+            if fatura and not fatura["paga"] and total_mes > 0:
                 if col1.button(
                     "💰 Pagar fatura",
                     key=f"pagar_fatura_{cartao['id']}",
