@@ -1,4 +1,5 @@
 import streamlit as st
+from modules.contas import interpretar_reais
 from database.neon_config import executar_sql, buscar_todos, buscar_um, transacao
 
 
@@ -228,12 +229,10 @@ def tela_despesas(usuario_id, mes):
                 list(contas_opcoes.keys())
             )
 
-            valor = st.number_input(
-                "Valor",
-                min_value=0.0,
-                step=10.0,
-                format="%.2f",
-                help="Exemplo: para R$ 150,00 digite 150."
+            valor_texto = st.text_input(
+                "Valor (R$)",
+                value="0,00",
+                help="Exemplo: 1.000,00"
             )
 
             vencimento = st.date_input(
@@ -255,33 +254,28 @@ def tela_despesas(usuario_id, mes):
 
             if enviar:
                 if not descricao.strip():
-                    st.warning(
-                        "Informe a descrição da despesa."
-                    )
-
-                elif valor <= 0:
-                    st.warning(
-                        "Informe um valor maior que zero."
-                    )
-
+                    st.warning("Informe a descrição da despesa.")
                 else:
-                    criar_despesa(
-                        usuario_id=usuario_id,
-                        mes=mes,
-                        descricao=descricao.strip(),
-                        categoria=categoria,
-                        conta_id=contas_opcoes[conta_nome],
-                        valor=valor,
-                        paga=paga,
-                        vencimento=vencimento,
-                        recorrente=recorrente
-                    )
-
-                    st.success(
-                        "Despesa cadastrada com sucesso!"
-                    )
-
-                    st.rerun()
+                    try:
+                        valor = interpretar_reais(valor_texto)
+                        if valor <= 0:
+                            raise ValueError("Informe um valor maior que zero.")
+                        criar_despesa(
+                            usuario_id=usuario_id,
+                            mes=mes,
+                            descricao=descricao.strip(),
+                            categoria=categoria,
+                            conta_id=contas_opcoes[conta_nome],
+                            valor=valor,
+                            paga=paga,
+                            vencimento=vencimento,
+                            recorrente=recorrente
+                        )
+                    except ValueError as erro:
+                        st.error(str(erro))
+                    else:
+                        st.success("Despesa cadastrada com sucesso!")
+                        st.rerun()
 
     # =====================================================
     # LISTAGEM
@@ -393,23 +387,37 @@ def tela_despesas(usuario_id, mes):
 
                 st.rerun()
 
-            if st.button(
-                "🗑️ Excluir despesa",
-                key=(
-                    f"despesas_excluir_"
-                    f"{usuario_id}_"
-                    f"{mes}_"
-                    f"{despesa_id}"
-                ),
-                use_container_width=True
-            ):
-                deletar_despesa(
-                    usuario_id=usuario_id,
-                    despesa_id=despesa_id
+            chave_confirmacao = f"confirmar_exclusao_despesa_{usuario_id}_{mes}_{despesa_id}"
+            if st.session_state.get(chave_confirmacao, False):
+                st.warning(
+                    f"Tem certeza de que deseja excluir a despesa '{despesa['descricao']}'?"
                 )
-
-                st.success(
-                    "Despesa excluída com sucesso!"
-                )
-
-                st.rerun()
+                confirmar, cancelar = st.columns(2)
+                if confirmar.button(
+                    "Confirmar exclusão",
+                    key=f"despesas_confirmar_{usuario_id}_{mes}_{despesa_id}",
+                    use_container_width=True
+                ):
+                    try:
+                        deletar_despesa(usuario_id=usuario_id, despesa_id=despesa_id)
+                    except Exception as erro:
+                        st.error(f"Não foi possível excluir a despesa: {erro}")
+                    else:
+                        st.session_state[chave_confirmacao] = False
+                        st.success("Despesa excluída com sucesso!")
+                        st.rerun()
+                if cancelar.button(
+                    "Cancelar",
+                    key=f"despesas_cancelar_{usuario_id}_{mes}_{despesa_id}",
+                    use_container_width=True
+                ):
+                    st.session_state[chave_confirmacao] = False
+                    st.rerun()
+            else:
+                if st.button(
+                    "🗑️ Excluir despesa",
+                    key=f"despesas_excluir_{usuario_id}_{mes}_{despesa_id}",
+                    use_container_width=True
+                ):
+                    st.session_state[chave_confirmacao] = True
+                    st.rerun()
