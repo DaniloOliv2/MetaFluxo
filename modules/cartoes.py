@@ -2,6 +2,7 @@ import streamlit as st
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy import text
+from modules.contas import interpretar_reais, texto_reais
 from database.neon_config import executar_sql, buscar_todos, buscar_um, transacao
 
 
@@ -344,7 +345,7 @@ def tela_cartoes(usuario_id, mes):
         with st.form("form_novo_cartao", clear_on_submit=True):
             nome = st.text_input("Nome do cartão", placeholder="Ex: Nubank Roxinho, Inter Gold")
             bandeira = st.selectbox("Bandeira", bandeiras)
-            limite = st.number_input("Limite total", min_value=0.0, step=100.0, format="%.2f")
+            limite_texto = st.text_input("Limite total (R$)", value="0,00", help="Exemplo: 2.000,00")
             conta_nome = st.selectbox("Conta para pagamento da fatura", list(contas_opcoes.keys()))
 
             col1, col2 = st.columns(2)
@@ -352,22 +353,21 @@ def tela_cartoes(usuario_id, mes):
             vencimento = col2.number_input("Dia de vencimento", min_value=1, max_value=31, value=10, step=1)
 
             if st.form_submit_button("Cadastrar cartão", use_container_width=True):
-                if not nome.strip():
-                    st.warning("Informe o nome do cartão.")
-                elif limite <= 0:
-                    st.warning("Informe um limite maior que zero.")
-                else:
-                    criar_cartao(
-                        usuario_id,
-                        nome.strip(),
-                        bandeira,
-                        limite,
-                        contas_opcoes[conta_nome],
-                        fechamento,
-                        vencimento
-                    )
-                    st.success("Cartão cadastrado com sucesso!")
-                    st.rerun()
+                try:
+                    limite = interpretar_reais(limite_texto)
+                    if not nome.strip():
+                        st.warning("Informe o nome do cartão.")
+                    elif limite <= 0:
+                        st.warning("Informe um limite maior que zero.")
+                    else:
+                        criar_cartao(
+                            usuario_id, nome.strip(), bandeira, limite,
+                            contas_opcoes[conta_nome], fechamento, vencimento
+                        )
+                        st.success("Cartão cadastrado com sucesso!")
+                        st.rerun()
+                except ValueError as erro:
+                    st.error(str(erro))
 
     cartoes = listar_cartoes(usuario_id)
 
@@ -382,25 +382,25 @@ def tela_cartoes(usuario_id, mes):
             cartao_nome = st.selectbox("Cartão", list(cartoes_opcoes.keys()))
             descricao = st.text_input("Descrição da compra", placeholder="Ex: mercado, celular, assinatura")
             categoria = st.selectbox("Categoria", categorias)
-            valor_total = st.number_input("Valor total da compra", min_value=0.0, step=100.0, format="%.2f")
+            valor_total_texto = st.text_input("Valor total da compra (R$)", value="0,00", help="Exemplo: 1.000,00")
             parcelas = st.number_input("Quantidade de parcelas", min_value=1, max_value=48, value=1, step=1)
 
             if st.form_submit_button("Cadastrar compra", use_container_width=True):
-                if not descricao.strip():
-                    st.warning("Informe a descrição da compra.")
-                elif valor_total <= 0:
-                    st.warning("Informe um valor maior que zero.")
-                else:
-                    try:
+                try:
+                    valor_total = interpretar_reais(valor_total_texto)
+                    if not descricao.strip():
+                        st.warning("Informe a descrição da compra.")
+                    elif valor_total <= 0:
+                        st.warning("Informe um valor maior que zero.")
+                    else:
                         criar_compra(
                             usuario_id, cartoes_opcoes[cartao_nome],
                             descricao.strip(), categoria, valor_total, parcelas
                         )
-                    except ValueError as erro:
-                        st.error(str(erro))
-                    else:
                         st.success("Compra cadastrada com sucesso!")
                         st.rerun()
+                except ValueError as erro:
+                    st.error(str(erro))
 
     st.divider()
     cols = st.columns(3)
@@ -474,13 +474,10 @@ def tela_cartoes(usuario_id, mes):
                         key=f"bandeira_cartao_{cartao['id']}"
                     )
 
-                    novo_limite = st.number_input(
-                        "Limite",
-                        min_value=0.0,
-                        value=float(cartao["limite"]),
-                        step=100.0,
-                        format="%.2f",
-                        key=f"limite_cartao_{cartao['id']}"
+                    novo_limite_texto = st.text_input(
+                        "Limite (R$)",
+                        value=texto_reais(cartao["limite"]),
+                        key=f"limite_cartao_br_{cartao['id']}"
                     )
 
                     conta_atual_label = None
@@ -532,13 +529,22 @@ def tela_cartoes(usuario_id, mes):
                     else:
                         b1, b2 = st.columns(2)
                         if b1.button("Salvar", key=f"salvar_cartao_{cartao['id']}", use_container_width=True):
-                            atualizar_cartao(
-                                usuario_id, cartao["id"], novo_nome.strip(),
-                                nova_bandeira, novo_limite, contas_opcoes[nova_conta],
-                                novo_fechamento, novo_vencimento
-                            )
-                            st.success("Cartão atualizado!")
-                            st.rerun()
+                            try:
+                                novo_limite = interpretar_reais(novo_limite_texto)
+                                if not novo_nome.strip():
+                                    raise ValueError("Informe o nome do cartão.")
+                                if novo_limite <= 0:
+                                    raise ValueError("Informe um limite maior que zero.")
+                                atualizar_cartao(
+                                    usuario_id, cartao["id"], novo_nome.strip(),
+                                    nova_bandeira, novo_limite, contas_opcoes[nova_conta],
+                                    novo_fechamento, novo_vencimento
+                                )
+                            except ValueError as erro:
+                                st.error(str(erro))
+                            else:
+                                st.success("Cartão atualizado!")
+                                st.rerun()
                         if b2.button("Excluir", key=f"excluir_cartao_{cartao['id']}", use_container_width=True):
                             st.session_state[chave_confirmacao_cartao] = True
                             st.rerun()
