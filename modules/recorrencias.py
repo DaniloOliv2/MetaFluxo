@@ -67,13 +67,24 @@ def despesa_ja_existe(usuario_id, mes, descricao, categoria, conta_id, valor):
     }) is not None
 
 
-def gerar_recorrencias(usuario_id, mes):
+MESES_PT = ("janeiro", "fevereiro", "março", "abril", "maio", "junho",
+            "julho", "agosto", "setembro", "outubro", "novembro", "dezembro")
+
+def normalizar_mes(mes):
+    texto_mes = str(mes).strip()
+    if texto_mes.casefold() in MESES_PT:
+        return f"{date.today().year}-{MESES_PT.index(texto_mes.casefold()) + 1:02d}"
     try:
-        ano, numero_mes = map(int, str(mes).split("-"))
-        if not (1 <= ano <= 9999 and 1 <= numero_mes <= 12):
-            raise ValueError
+        ano, numero_mes = map(int, texto_mes.split("-"))
+        if len(texto_mes) == 7 and 1 <= ano <= 9999 and 1 <= numero_mes <= 12:
+            return f"{ano:04d}-{numero_mes:02d}"
     except (TypeError, ValueError):
-        raise ValueError("Selecione um mês válido no formato AAAA-MM.")
+        pass
+    raise ValueError("Selecione um mês válido.")
+
+def gerar_recorrencias(usuario_id, mes):
+    mes = normalizar_mes(mes)
+    ano, numero_mes = map(int, mes.split("-"))
 
     criadas = 0
     # A verificação e a inserção ocorrem na mesma transação. O bloqueio por
@@ -139,6 +150,7 @@ def listar_recorrencias(usuario_id):
 
 
 def tela_recorrencias(usuario_id, mes):
+    mes = normalizar_mes(mes)
     st.subheader("📅 Recorrências")
     st.info("As recorrências são criadas a partir das despesas marcadas como recorrentes na aba 💳 Despesas.")
     col1, col2 = st.columns([1, 2])
