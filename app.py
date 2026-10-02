@@ -5,7 +5,7 @@ from modules.exportar import tela_exportar
 from modules.recorrencias import tela_recorrencias
 from modules.dashboard import tela_dashboard_profissional
 from modules.faturas import tela_faturas
-from modules.contas import tela_contas
+from modules.contas import tela_contas, interpretar_reais, texto_reais
 from modules.receitas import tela_receitas
 from modules.despesas import tela_despesas
 from modules.cartoes import tela_cartoes
@@ -795,43 +795,50 @@ with st.sidebar:
         mes
     )
 
-    renda = st.number_input(
-        "Renda do mês (R$)",
-        min_value=0.0,
-        value=float(config["renda"]),
-        step=100.0,
-        format="%.2f",
-        disabled=privacidade,
-        key=f"sidebar_renda_{user_id}_{mes}"
-    )
+    # Campos monetários brasileiros. Salva apenas ao clicar no botão.
+    with st.form(key=f"form_config_{user_id}_{mes}"):
+        renda_texto = st.text_input(
+            "Renda do mês (R$)",
+            value=texto_reais(config["renda"]),
+            disabled=privacidade,
+            key=f"sidebar_renda_{user_id}_{mes}"
+        )
+        meta_texto = st.text_input(
+            "Meta de investimento (R$)",
+            value=texto_reais(config["meta_investimento"]),
+            disabled=privacidade,
+            key=f"sidebar_meta_{user_id}_{mes}"
+        )
+        investido_texto = st.text_input(
+            "Investido no mês (R$)",
+            value=texto_reais(config["investido"]),
+            disabled=privacidade,
+            key=f"sidebar_investido_{user_id}_{mes}"
+        )
+        salvar_config = st.form_submit_button(
+            "Salvar valores do mês",
+            disabled=privacidade,
+            use_container_width=True
+        )
 
-    meta_inv = st.number_input(
-        "Meta de investimento (R$)",
-        min_value=0.0,
-        value=float(config["meta_investimento"]),
-        step=50.0,
-        format="%.2f",
-        disabled=privacidade,
-        key=f"sidebar_meta_{user_id}_{mes}"
-    )
+    if salvar_config:
+        try:
+            novos_valores = [
+                interpretar_reais(texto)
+                for texto in (renda_texto, meta_texto, investido_texto)
+            ]
+            if any(valor < 0 for valor in novos_valores):
+                raise ValueError("Os valores não podem ser negativos.")
+            atualizar_config(user_id, mes, *novos_valores)
+            st.success("Valores do mês atualizados!")
+            st.rerun()
+        except ValueError as erro:
+            st.error(str(erro))
 
-    investido = st.number_input(
-        "Investido no mês (R$)",
-        min_value=0.0,
-        value=float(config["investido"]),
-        step=50.0,
-        format="%.2f",
-        disabled=privacidade,
-        key=f"sidebar_investido_{user_id}_{mes}"
-    )
-
-    atualizar_config(
-        user_id,
-        mes,
-        renda,
-        meta_inv,
-        investido
-    )
+    # Enquanto não houver confirmação, os cálculos usam os valores salvos.
+    renda = float(config["renda"])
+    meta_inv = float(config["meta_investimento"])
+    investido = float(config["investido"])
 
     st.divider()
 
@@ -1032,12 +1039,9 @@ with aba1:
                 key=f"lanc_categoria_{user_id}_{mes}_{gasto_id}"
             )
 
-            valor = c.number_input(
-                "Valor",
-                min_value=0.0,
-                value=float(gasto["valor"]),
-                step=10.0,
-                format="%.2f",
+            valor_texto = c.text_input(
+                "Valor (R$)",
+                value=texto_reais(gasto["valor"]),
                 key=f"lanc_valor_{user_id}_{mes}_{gasto_id}",
                 disabled=privacidade
             )
@@ -1048,14 +1052,27 @@ with aba1:
                 key=f"lanc_pago_{user_id}_{mes}_{gasto_id}"
             )
 
-            atualizar_gasto(
-                gasto_id=gasto_id,
-                user_id=user_id,
-                item=item,
-                categoria=categoria,
-                valor=valor,
-                pago=pago
-            )
+            if d.button(
+                "Salvar",
+                key=f"lanc_salvar_{user_id}_{mes}_{gasto_id}",
+                disabled=privacidade
+            ):
+                try:
+                    valor = interpretar_reais(valor_texto)
+                    if valor < 0:
+                        raise ValueError("O valor não pode ser negativo.")
+                    atualizar_gasto(
+                        gasto_id=gasto_id,
+                        user_id=user_id,
+                        item=item,
+                        categoria=categoria,
+                        valor=valor,
+                        pago=pago
+                    )
+                    st.success("Lançamento salvo!")
+                    st.rerun()
+                except ValueError as erro:
+                    st.error(str(erro))
 
             if e.button(
                 "🗑️",
