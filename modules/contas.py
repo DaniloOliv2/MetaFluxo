@@ -196,36 +196,11 @@ def tela_contas(usuario_id):
                         key=f"saldo_conta_br_{conta['id']}"
                     )
 
-                    c1, c2 = st.columns(2)
-
-                    if c1.button(
-                        "Salvar",
-                        key=f"salvar_conta_{conta['id']}",
-                        use_container_width=True
-                    ):
-                        if not novo_nome.strip():
-                            st.warning("Informe o nome da conta.")
-                        else:
-                            try:
-                                novo_saldo = interpretar_reais(novo_saldo_texto)
-                                atualizar_conta(
-                                    conta["id"], novo_nome.strip(), novo_tipo, novo_saldo
-                                )
-                            except ValueError as erro:
-                                st.error(str(erro))
-                            else:
-                                st.success("Conta atualizada!")
-                                st.rerun()
-
-                    if c2.button(
-                        "Excluir",
-                        key=f"excluir_conta_{conta['id']}",
-                        use_container_width=True
-                    ):
-                        st.session_state[f"confirmar_exclusao_conta_{conta['id']}"] = True
-
-                    if st.session_state.get(f"confirmar_exclusao_conta_{conta['id']}", False):
-                        st.warning(f"Tem certeza de que deseja excluir a conta '{conta['nome']}'?")
+                    chave_confirmacao = f"confirmar_exclusao_conta_{conta['id']}"
+                    if st.session_state.get(chave_confirmacao, False):
+                        st.warning(
+                            f"Tem certeza de que deseja excluir a conta '{conta['nome']}'?"
+                        )
                         confirmar, cancelar = st.columns(2)
                         if confirmar.button(
                             "Confirmar exclusão",
@@ -233,12 +208,39 @@ def tela_contas(usuario_id):
                             use_container_width=True,
                         ):
                             deletar_conta(conta["id"], usuario_id)
-                            st.session_state[f"confirmar_exclusao_conta_{conta['id']}"] = False
+                            st.session_state[chave_confirmacao] = False
                             st.rerun()
                         if cancelar.button(
                             "Cancelar",
                             key=f"cancelar_conta_{conta['id']}",
                             use_container_width=True,
                         ):
-                            st.session_state[f"confirmar_exclusao_conta_{conta['id']}"] = False
+                            st.session_state[chave_confirmacao] = False
+                            st.rerun()
+                    else:
+                        c1, c2 = st.columns(2)
+                        if c1.button(
+                            "Salvar",
+                            key=f"salvar_conta_{conta['id']}",
+                            use_container_width=True,
+                        ):
+                            if not novo_nome.strip():
+                                st.warning("Informe o nome da conta.")
+                            else:
+                                try:
+                                    novo_saldo = interpretar_reais(novo_saldo_texto)
+                                    atualizar_conta(
+                                        conta["id"], novo_nome.strip(), novo_tipo, novo_saldo
+                                    )
+                                except ValueError as erro:
+                                    st.error(str(erro))
+                                else:
+                                    st.success("Conta atualizada!")
+                                    st.rerun()
+                        if c2.button(
+                            "Excluir",
+                            key=f"excluir_conta_{conta['id']}",
+                            use_container_width=True,
+                        ):
+                            st.session_state[chave_confirmacao] = True
                             st.rerun()
