@@ -1,5 +1,6 @@
 import streamlit as st
 from database.neon_config import executar_sql, buscar_todos, buscar_um, transacao
+from modules.contas import interpretar_reais
 
 
 def fmt_moeda(valor):
@@ -172,12 +173,8 @@ def tela_receitas(usuario_id, mes):
             categoria = st.selectbox("Categoria", categorias)
             conta_nome = st.selectbox("Conta de destino", list(contas_opcoes.keys()))
 
-            valor = st.number_input(
-                "Valor",
-                min_value=0.0,
-                step=100.0,
-                format="%.2f",
-                help="Para trinta mil, digite 30000."
+            valor_texto = st.text_input(
+                "Valor (R$)", value="0,00", help="Exemplo: 1.000,00"
             )
 
             recebida = st.checkbox("Já recebi esse valor?", value=True)
@@ -186,20 +183,22 @@ def tela_receitas(usuario_id, mes):
             if enviar:
                 if not descricao.strip():
                     st.warning("Informe a descrição da receita.")
-                elif valor <= 0:
-                    st.warning("Informe um valor maior que zero.")
                 else:
-                    criar_receita(
-                        usuario_id,
-                        mes,
-                        descricao.strip(),
-                        categoria,
-                        contas_opcoes[conta_nome],
-                        valor,
-                        recebida
-                    )
-                    st.success("Receita cadastrada com sucesso!")
-                    st.rerun()
+                    try:
+                        valor = interpretar_reais(valor_texto)
+                        if valor <= 0:
+                            raise ValueError("Informe um valor maior que zero.")
+                        criar_receita(
+                            usuario_id, mes, descricao.strip(), categoria,
+                            contas_opcoes[conta_nome], valor, recebida
+                        )
+                    except ValueError as erro:
+                        st.error(str(erro))
+                    except Exception:
+                        st.error("Não foi possível cadastrar a receita. Nenhum saldo foi alterado.")
+                    else:
+                        st.success("Receita cadastrada com sucesso!")
+                        st.rerun()
 
     receitas = listar_receitas(usuario_id, mes)
 
@@ -227,11 +226,22 @@ def tela_receitas(usuario_id, mes):
             st.write(f"**Valor:** {fmt_moeda(receita['valor'])}")
             st.write(f"**Status:** {status}")
 
-            if st.button(
-                "🗑️ Excluir receita",
-                key=f"del_receita_{receita['id']}",
-                use_container_width=True
-            ):
-                deletar_receita(usuario_id, receita["id"])
-                st.success("Receita excluída!")
+            chave = f"confirmar_exclusao_receita_{usuario_id}_{receita['id']}"
+            if st.session_state.get(chave, False):
+                st.warning(f"Tem certeza de que deseja excluir a receita '{receita['descricao']}'? Se ela já foi recebida, o valor será descontado da conta vinculada.")
+                confirmar, cancelar = st.columns(2)
+                if confirmar.button("Confirmar exclusão", key=f"conf_receita_{usuario_id}_{receita['id']}", use_container_width=True):
+                    try:
+                        deletar_receita(usuario_id, receita["id"])
+                    except Exception:
+                        st.error("Não foi possível excluir a receita. Nenhum saldo foi alterado.")
+                    else:
+                        st.session_state[chave] = False
+                        st.success("Receita excluída!")
+                        st.rerun()
+                if cancelar.button("Cancelar", key=f"cancel_receita_{usuario_id}_{receita['id']}", use_container_width=True):
+                    st.session_state[chave] = False
+                    st.rerun()
+            elif st.button("🗑️ Excluir receita", key=f"del_receita_{usuario_id}_{receita['id']}", use_container_width=True):
+                st.session_state[chave] = True
                 st.rerun()
