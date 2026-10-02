@@ -1,5 +1,5 @@
 import streamlit as st
-from database.neon_config import executar_sql, buscar_todos, buscar_um
+from database.neon_config import executar_sql, buscar_todos, buscar_um, transacao
 
 
 def fmt_moeda(valor):
@@ -107,108 +107,85 @@ def gerar_ou_atualizar_fatura(usuario_id, cartao_id, mes, valor):
 
 
 def pagar_fatura(usuario_id, cartao_id, mes):
-    fatura = buscar_fatura(usuario_id, cartao_id, mes)
+    with transacao() as conexao:
+        fatura = buscar_um("""
+            SELECT id, valor, paga FROM faturas
+            WHERE usuario_id = :usuario_id AND cartao_id = :cartao_id
+              AND mes = :mes
+            FOR UPDATE
+        """, {
+            "usuario_id": usuario_id, "cartao_id": cartao_id, "mes": mes
+        }, conexao=conexao)
+        if not fatura:
+            return False, "Fatura não encontrada."
+        if fatura["paga"]:
+            return False, "Essa fatura já está paga."
 
-    if not fatura:
-        return False, "Fatura não encontrada."
+        cartao = buscar_um("""
+            SELECT c.conta_id, ct.saldo AS conta_saldo
+            FROM cartoes c
+            LEFT JOIN contas ct ON ct.id = c.conta_id AND ct.usuario_id = c.usuario_id
+            WHERE c.id = :cartao_id AND c.usuario_id = :usuario_id
+        """, {"cartao_id": cartao_id, "usuario_id": usuario_id}, conexao=conexao)
+        if not cartao:
+            return False, "Cartão não encontrado."
+        if not cartao["conta_id"] or cartao["conta_saldo"] is None:
+            return False, "Cartão sem conta vinculada."
 
-    if fatura["paga"]:
-        return False, "Essa fatura já está paga."
+        # A condição no UPDATE protege contra saldo insuficiente mesmo em concorrência.
+        resultado = executar_sql("""
+            UPDATE contas SET saldo = saldo - :valor
+            WHERE id = :conta_id AND usuario_id = :usuario_id
+              AND saldo >= :valor
+        """, {
+            "valor": fatura["valor"], "conta_id": cartao["conta_id"],
+            "usuario_id": usuario_id
+        }, conexao=conexao)
+        if resultado.rowcount != 1:
+            return False, "Saldo insuficiente ou conta não encontrada."
 
-    cartao = buscar_um("""
-        SELECT
-            c.*,
-            ct.id AS conta_id_vinculada,
-            ct.saldo AS conta_saldo
-        FROM cartoes c
-        LEFT JOIN contas ct
-            ON ct.id = c.conta_id
-        WHERE c.id = :cartao_id
-          AND c.usuario_id = :usuario_id
-        LIMIT 1
-    """, {
-        "cartao_id": cartao_id,
-        "usuario_id": usuario_id
-    })
-
-    if not cartao:
-        return False, "Cartão não encontrado."
-
-    if not cartao["conta_id_vinculada"]:
-        return False, "Cartão sem conta vinculada."
-
-    valor = float(fatura["valor"])
-    saldo = float(cartao["conta_saldo"] or 0)
-
-    if saldo < valor:
-        return False, "Saldo insuficiente."
-
-    executar_sql("""
-        UPDATE contas
-        SET saldo = saldo - :valor
-        WHERE id = :conta_id
-    """, {
-        "valor": valor,
-        "conta_id": cartao["conta_id_vinculada"]
-    })
-
-    executar_sql("""
-        UPDATE faturas
-        SET paga = TRUE
-        WHERE id = :fatura_id
-    """, {
-        "fatura_id": fatura["id"]
-    })
-
-    return True, "Fatura paga com sucesso!"
-
+        executar_sql("""
+            UPDATE faturas SET paga = TRUE
+            WHERE id = :fatura_id AND usuario_id = :usuario_id
+        """, {"fatura_id": fatura["id"], "usuario_id": usuario_id}, conexao=conexao)
+        return True, "Fatura paga com sucesso!"
 
 def reabrir_fatura(usuario_id, cartao_id, mes):
-    fatura = buscar_fatura(usuario_id, cartao_id, mes)
+    with transacao() as conexao:
+        fatura = buscar_um("""
+            SELECT id, valor, paga FROM faturas
+            WHERE usuario_id = :usuario_id AND cartao_id = :cartao_id
+              AND mes = :mes
+            FOR UPDATE
+        """, {
+            "usuario_id": usuario_id, "cartao_id": cartao_id, "mes": mes
+        }, conexao=conexao)
+        if not fatura or not fatura["paga"]:
+            return False, "Não foi possível reabrir."
 
-    if not fatura or not fatura["paga"]:
-        return False, "Não foi possível reabrir."
+        cartao = buscar_um("""
+            SELECT c.conta_id FROM cartoes c
+            JOIN contas ct ON ct.id = c.conta_id AND ct.usuario_id = c.usuario_id
+            WHERE c.id = :cartao_id AND c.usuario_id = :usuario_id
+        """, {"cartao_id": cartao_id, "usuario_id": usuario_id}, conexao=conexao)
+        if not cartao or not cartao["conta_id"]:
+            return False, "Conta vinculada não encontrada."
 
-    cartao = buscar_um("""
-        SELECT
-            c.*,
-            ct.id AS conta_id_vinculada
-        FROM cartoes c
-        LEFT JOIN contas ct
-            ON ct.id = c.conta_id
-        WHERE c.id = :cartao_id
-          AND c.usuario_id = :usuario_id
-        LIMIT 1
-    """, {
-        "cartao_id": cartao_id,
-        "usuario_id": usuario_id
-    })
+        resultado = executar_sql("""
+            UPDATE contas SET saldo = saldo + :valor
+            WHERE id = :conta_id AND usuario_id = :usuario_id
+        """, {
+            "valor": fatura["valor"], "conta_id": cartao["conta_id"],
+            "usuario_id": usuario_id
+        }, conexao=conexao)
+        if resultado.rowcount != 1:
+            raise ValueError("Não foi possível atualizar o saldo da conta.")
 
-    if not cartao:
-        return False, "Cartão não encontrado."
-
-    if not cartao["conta_id_vinculada"]:
-        return False, "Conta não encontrada."
-
-    executar_sql("""
-        UPDATE contas
-        SET saldo = saldo + :valor
-        WHERE id = :conta_id
-    """, {
-        "valor": float(fatura["valor"]),
-        "conta_id": cartao["conta_id_vinculada"]
-    })
-
-    executar_sql("""
-        UPDATE faturas
-        SET paga = FALSE
-        WHERE id = :fatura_id
-    """, {
-        "fatura_id": fatura["id"]
-    })
-
-    return True, "Fatura reaberta!"
-
+        executar_sql("""
+            UPDATE faturas SET paga = FALSE
+            WHERE id = :fatura_id AND usuario_id = :usuario_id
+        """, {"fatura_id": fatura["id"], "usuario_id": usuario_id}, conexao=conexao)
+        return True, "Fatura reaberta!"
 
 def listar_compras_fatura(usuario_id, cartao_id, mes):
     return buscar_todos("""
