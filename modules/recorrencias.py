@@ -149,23 +149,44 @@ def listar_recorrencias(usuario_id):
     return _modelos_unicos(registros)
 
 
+def _vencimento_no_mes(vencimento_original, mes):
+    ano, numero_mes = map(int, mes.split("-"))
+    original = _data_vencimento(vencimento_original)
+    dia = min(original.day, calendar.monthrange(ano, numero_mes)[1])
+    return date(ano, numero_mes, dia)
+
+
 def tela_recorrencias(usuario_id, mes):
     mes = normalizar_mes(mes)
     st.subheader("📅 Recorrências")
     st.info("As recorrências são criadas a partir das despesas marcadas como recorrentes na aba 💳 Despesas.")
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        if st.button("🔄 Gerar recorrências deste mês", use_container_width=True):
-            try:
-                criadas = gerar_recorrencias(usuario_id, mes)
-            except (ValueError, Exception) as erro:
-                st.error(f"Não foi possível gerar as recorrências: {erro}")
+
+    chave_mensagem = f"mensagem_recorrencias_{usuario_id}_{mes}"
+    if st.button("🔄 Gerar recorrências deste mês", use_container_width=False):
+        try:
+            criadas = gerar_recorrencias(usuario_id, mes)
+        except Exception as erro:
+            st.session_state[chave_mensagem] = ("erro", f"Não foi possível gerar as recorrências: {erro}")
+        else:
+            if criadas:
+                st.session_state[chave_mensagem] = (
+                    "sucesso", f"{criadas} despesa(s) recorrente(s) criada(s) para {mes}."
+                )
             else:
-                if criadas > 0:
-                    st.success(f"{criadas} despesa(s) recorrente(s) criada(s) para {mes}.")
-                else:
-                    st.warning("Nenhuma nova recorrência foi criada. Talvez elas já existam neste mês.")
-                st.rerun()
+                st.session_state[chave_mensagem] = (
+                    "aviso", f"Nenhuma nova despesa criada para {mes}. Confira o status abaixo."
+                )
+        st.rerun()
+
+    mensagem = st.session_state.get(chave_mensagem)
+    if mensagem:
+        tipo, conteudo = mensagem
+        if tipo == "erro":
+            st.error(conteudo)
+        elif tipo == "sucesso":
+            st.success(conteudo)
+        else:
+            st.warning(conteudo)
 
     recorrencias = listar_recorrencias(usuario_id)
     if not recorrencias:
@@ -177,10 +198,26 @@ def tela_recorrencias(usuario_id, mes):
     total = sum((Decimal(str(item["valor"])) for item in recorrencias), Decimal("0"))
     st.metric("Total mensal previsto em recorrências", fmt_moeda(total))
     st.divider()
+
+    ano, numero_mes = map(int, mes.split("-"))
     for item in recorrencias:
+        original = _data_vencimento(item["vencimento"])
+        vencimento_previsto = _vencimento_no_mes(original, mes)
+        if (ano, numero_mes) < (original.year, original.month):
+            status = "Ainda não iniciada neste mês"
+        elif despesa_ja_existe(
+            usuario_id, mes, item["descricao"], item["categoria"],
+            item["conta_id"], item["valor"]
+        ):
+            status = "✅ Despesa já cadastrada neste mês"
+        else:
+            status = "⏳ Ainda não gerada neste mês"
+
         with st.container(border=True):
             st.markdown(f"### {item['descricao']}")
             st.write(f"**Categoria:** {item['categoria']}")
             st.write(f"**Conta:** {item['conta']}")
             st.write(f"**Valor:** {fmt_moeda(item['valor'])}")
-            st.write(f"**Vencimento original:** {item['vencimento']}")
+            st.write(f"**Vencimento previsto para {mes}:** {vencimento_previsto.strftime('%d/%m/%Y')}")
+            st.caption(f"Vencimento original: {original.strftime('%d/%m/%Y')}")
+            st.write(f"**Status:** {status}")
