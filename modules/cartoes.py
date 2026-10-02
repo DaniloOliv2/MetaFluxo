@@ -430,18 +430,25 @@ def tela_cartoes(usuario_id, mes):
                             st.write(f"Parcelas: {compra['parcelas']}x de {fmt_moeda(valor_parcela)}")
                             st.write(f"Mês: {compra['mes']}")
 
-                            if st.button(
-                                "Excluir compra",
-                                key=f"del_compra_{compra['id']}",
-                                use_container_width=True
-                            ):
-                                try:
-                                    deletar_compra(usuario_id, compra["id"])
-                                except ValueError as erro:
-                                    st.error(str(erro))
-                                else:
-                                    st.success("Compra excluída!")
+                            chave_confirmacao = f"confirmar_compra_{usuario_id}_{compra['id']}"
+                            if st.session_state.get(chave_confirmacao, False):
+                                st.warning(f"Tem certeza de que deseja excluir a compra '{compra['descricao']}'? Esta ação exclui a parcela selecionada.")
+                                confirmar, cancelar = st.columns(2)
+                                if confirmar.button("Confirmar exclusão", key=f"confirmar_compra_cartao_{compra['id']}", use_container_width=True):
+                                    try:
+                                        deletar_compra(usuario_id, compra["id"])
+                                    except ValueError as erro:
+                                        st.error(str(erro))
+                                    else:
+                                        st.session_state[chave_confirmacao] = False
+                                        st.success("Compra excluída!")
+                                        st.rerun()
+                                if cancelar.button("Cancelar", key=f"cancelar_compra_cartao_{compra['id']}", use_container_width=True):
+                                    st.session_state[chave_confirmacao] = False
                                     st.rerun()
+                            elif st.button("Excluir compra", key=f"del_compra_{compra['id']}", use_container_width=True):
+                                st.session_state[chave_confirmacao] = True
+                                st.rerun()
 
                             st.divider()
 
@@ -503,34 +510,31 @@ def tela_cartoes(usuario_id, mes):
                         key=f"vencimento_cartao_{cartao['id']}"
                     )
 
-                    b1, b2 = st.columns(2)
-
-                    if b1.button(
-                        "Salvar",
-                        key=f"salvar_cartao_{cartao['id']}",
-                        use_container_width=True
-                    ):
-                        atualizar_cartao(
-                            usuario_id,
-                            cartao["id"],
-                            novo_nome.strip(),
-                            nova_bandeira,
-                            novo_limite,
-                            contas_opcoes[nova_conta],
-                            novo_fechamento,
-                            novo_vencimento
-                        )
-                        st.success("Cartão atualizado!")
-                        st.rerun()
-
-                    if b2.button(
-                        "Excluir",
-                        key=f"excluir_cartao_{cartao['id']}",
-                        use_container_width=True
-                    ):
-                        deletar_cartao(usuario_id, cartao["id"])
-                        st.success("Cartão excluído!")
-                        st.rerun()
+                    chave_confirmacao_cartao = f"confirmar_exclusao_cartao_{usuario_id}_{cartao['id']}"
+                    if st.session_state.get(chave_confirmacao_cartao, False):
+                        st.warning(f"Tem certeza de que deseja excluir o cartão '{cartao['nome']}'? Ele será desativado.")
+                        confirmar, cancelar = st.columns(2)
+                        if confirmar.button("Confirmar exclusão", key=f"confirmar_cartao_{cartao['id']}", use_container_width=True):
+                            deletar_cartao(usuario_id, cartao["id"])
+                            st.session_state[chave_confirmacao_cartao] = False
+                            st.success("Cartão excluído!")
+                            st.rerun()
+                        if cancelar.button("Cancelar", key=f"cancelar_cartao_{cartao['id']}", use_container_width=True):
+                            st.session_state[chave_confirmacao_cartao] = False
+                            st.rerun()
+                    else:
+                        b1, b2 = st.columns(2)
+                        if b1.button("Salvar", key=f"salvar_cartao_{cartao['id']}", use_container_width=True):
+                            atualizar_cartao(
+                                usuario_id, cartao["id"], novo_nome.strip(),
+                                nova_bandeira, novo_limite, contas_opcoes[nova_conta],
+                                novo_fechamento, novo_vencimento
+                            )
+                            st.success("Cartão atualizado!")
+                            st.rerun()
+                        if b2.button("Excluir", key=f"excluir_cartao_{cartao['id']}", use_container_width=True):
+                            st.session_state[chave_confirmacao_cartao] = True
+                            st.rerun()
 
     st.divider()
     st.subheader(f"📄 Compras do mês: {mes}")
@@ -553,15 +557,22 @@ def tela_cartoes(usuario_id, mes):
                 st.write(f"**Valor total:** {fmt_moeda(compra['valor_total'])}")
                 st.write(f"**Parcelas:** {compra['parcelas']}x de {fmt_moeda(valor_parcela)}")
 
-                if st.button(
-                    "🗑️ Excluir",
-                    key=f"del_compra_mes_{compra['id']}",
-                    use_container_width=True
-                ):
-                    try:
-                        deletar_compra(usuario_id, compra["id"])
-                    except ValueError as erro:
-                        st.error(str(erro))
-                    else:
-                        st.success("Compra excluída!")
+                chave_confirmacao = f"confirmar_compra_{usuario_id}_{compra['id']}"
+                if st.session_state.get(chave_confirmacao, False):
+                    st.warning(f"Tem certeza de que deseja excluir a compra '{compra['descricao']}'? Esta ação exclui a parcela selecionada.")
+                    confirmar, cancelar = st.columns(2)
+                    if confirmar.button("Confirmar exclusão", key=f"confirmar_compra_mes_{compra['id']}", use_container_width=True):
+                        try:
+                            deletar_compra(usuario_id, compra["id"])
+                        except ValueError as erro:
+                            st.error(str(erro))
+                        else:
+                            st.session_state[chave_confirmacao] = False
+                            st.success("Compra excluída!")
+                            st.rerun()
+                    if cancelar.button("Cancelar", key=f"cancelar_compra_mes_{compra['id']}", use_container_width=True):
+                        st.session_state[chave_confirmacao] = False
                         st.rerun()
+                elif st.button("🗑️ Excluir", key=f"del_compra_mes_{compra['id']}", use_container_width=True):
+                    st.session_state[chave_confirmacao] = True
+                    st.rerun()
