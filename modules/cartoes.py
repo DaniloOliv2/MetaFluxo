@@ -1,6 +1,7 @@
 import streamlit as st
 from datetime import datetime
-from database.neon_config import executar_sql, buscar_todos, buscar_um
+from decimal import Decimal, ROUND_HALF_UP
+from database.neon_config import executar_sql, buscar_todos, buscar_um, transacao
 
 
 def fmt_moeda(valor):
@@ -49,6 +50,21 @@ def garantir_tabelas_cartoes():
                 FOREIGN KEY (cartao_id)
                 REFERENCES cartoes(id)
                 ON DELETE CASCADE
+        )
+    """)
+
+
+    # A aba Cartões pode ser aberta antes da aba Faturas.
+    executar_sql("""
+        CREATE TABLE IF NOT EXISTS faturas (
+            id BIGSERIAL PRIMARY KEY,
+            usuario_id BIGINT NOT NULL,
+            cartao_id BIGINT NOT NULL REFERENCES cartoes(id) ON DELETE CASCADE,
+            mes TEXT NOT NULL,
+            valor NUMERIC(15,2) NOT NULL DEFAULT 0,
+            paga BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            CONSTRAINT uq_fatura_cartao_mes UNIQUE (usuario_id, cartao_id, mes)
         )
     """)
 
@@ -160,76 +176,69 @@ def adicionar_meses(mes_base, incremento):
 
 
 def criar_compra(usuario_id, cartao_id, descricao, categoria, valor_total, parcelas):
-    cartao = buscar_um("""
-        SELECT fechamento
-        FROM cartoes
-        WHERE id = :cartao_id
-    """, {
-        "cartao_id": cartao_id
-    })
+    quantidade = int(parcelas)
+    total = Decimal(str(valor_total)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    if quantidade < 1 or quantidade > 48 or total <= 0:
+        raise ValueError("Informe um valor positivo e de 1 a 48 parcelas.")
 
-    fechamento = cartao["fechamento"]
-    mes_inicial = calcular_mes_fatura(fechamento)
-    valor_parcela = float(valor_total) / int(parcelas)
+    with transacao() as conexao:
+        cartao = buscar_um("""
+            SELECT fechamento FROM cartoes
+            WHERE id = :cartao_id AND usuario_id = :usuario_id AND ativo = TRUE
+            FOR UPDATE
+        """, {"cartao_id": cartao_id, "usuario_id": usuario_id}, conexao=conexao)
+        if not cartao:
+            raise ValueError("Cartão não encontrado ou inativo.")
 
-    resultado = executar_sql("""
-        INSERT INTO compras_cartao (
-            usuario_id, cartao_id, mes, descricao, categoria,
-            valor_total, parcelas, parcela_atual, valor_parcela, paga
-        )
-        VALUES (
-            :usuario_id, :cartao_id, :mes, :descricao, :categoria,
-            :valor_total, :parcelas, 1, :valor_parcela, FALSE
-        )
-        RETURNING id
-    """, {
-        "usuario_id": usuario_id,
-        "cartao_id": cartao_id,
-        "mes": mes_inicial,
-        "descricao": descricao,
-        "categoria": categoria,
-        "valor_total": float(valor_total),
-        "parcelas": int(parcelas),
-        "valor_parcela": valor_parcela
-    })
+        mes_inicial = calcular_mes_fatura(cartao["fechamento"])
+        # Distribui os centavos restantes sem perder o valor total da compra.
+        centavos = int(total * 100)
+        base_centavos, restantes = divmod(centavos, quantidade)
+        compra_pai_id = None
 
-    compra_pai_id = resultado.scalar_one()
+        for numero in range(1, quantidade + 1):
+            valor_centavos = base_centavos + (1 if numero <= restantes else 0)
+            valor_parcela = Decimal(valor_centavos) / Decimal(100)
+            mes_parcela = adicionar_meses(mes_inicial, numero - 1)
+            fatura = buscar_um("""
+                SELECT paga FROM faturas
+                WHERE usuario_id = :usuario_id AND cartao_id = :cartao_id
+                  AND mes = :mes
+                FOR UPDATE
+            """, {
+                "usuario_id": usuario_id, "cartao_id": cartao_id,
+                "mes": mes_parcela
+            }, conexao=conexao)
+            if fatura and fatura["paga"]:
+                raise ValueError(
+                    f"A fatura de {mes_parcela} já foi paga. Não é possível alterar esse mês."
+                )
 
-    executar_sql("""
-        UPDATE compras_cartao
-        SET compra_pai_id = :compra_pai_id
-        WHERE id = :compra_pai_id
-    """, {
-        "compra_pai_id": compra_pai_id
-    })
-
-    for parcela in range(2, int(parcelas) + 1):
-        mes_parcela = adicionar_meses(mes_inicial, parcela - 1)
-
-        executar_sql("""
-            INSERT INTO compras_cartao (
-                usuario_id, cartao_id, mes, descricao, categoria,
-                valor_total, parcelas, parcela_atual, valor_parcela,
-                compra_pai_id, paga
-            )
-            VALUES (
-                :usuario_id, :cartao_id, :mes, :descricao, :categoria,
-                :valor_total, :parcelas, :parcela_atual, :valor_parcela,
-                :compra_pai_id, FALSE
-            )
-        """, {
-            "usuario_id": usuario_id,
-            "cartao_id": cartao_id,
-            "mes": mes_parcela,
-            "descricao": descricao,
-            "categoria": categoria,
-            "valor_total": valor_parcela,
-            "parcelas": int(parcelas),
-            "parcela_atual": parcela,
-            "valor_parcela": valor_parcela,
-            "compra_pai_id": compra_pai_id
-        })
-
+            resultado = executar_sql("""
+                INSERT INTO compras_cartao (
+                    usuario_id, cartao_id, mes, descricao, categoria,
+                    valor_total, parcelas, parcela_atual, valor_parcela,
+                    compra_pai_id, paga
+                ) VALUES (
+                    :usuario_id, :cartao_id, :mes, :descricao, :categoria,
+                    :valor_total, :parcelas, :parcela_atual, :valor_parcela,
+                    :compra_pai_id, FALSE
+                ) RETURNING id
+            """, {
+                "usuario_id": usuario_id, "cartao_id": cartao_id,
+                "mes": mes_parcela, "descricao": descricao,
+                "categoria": categoria, "valor_total": str(total),
+                "parcelas": quantidade, "parcela_atual": numero,
+                "valor_parcela": str(valor_parcela),
+                "compra_pai_id": compra_pai_id
+            }, conexao=conexao)
+            novo_id = resultado.scalar_one()
+            if compra_pai_id is None:
+                compra_pai_id = novo_id
+                executar_sql("""
+                    UPDATE compras_cartao SET compra_pai_id = :id
+                    WHERE id = :id AND usuario_id = :usuario_id
+                """, {"id": novo_id, "usuario_id": usuario_id}, conexao=conexao)
 
 def listar_compras_cartao(usuario_id, cartao_id):
     return buscar_todos("""
@@ -262,15 +271,29 @@ def listar_compras_mes(usuario_id, mes):
 
 
 def deletar_compra(usuario_id, compra_id):
-    executar_sql("""
-        DELETE FROM compras_cartao
-        WHERE id = :compra_id
-          AND usuario_id = :usuario_id
-    """, {
-        "compra_id": compra_id,
-        "usuario_id": usuario_id
-    })
-
+    with transacao() as conexao:
+        compra = buscar_um("""
+            SELECT id, cartao_id, mes FROM compras_cartao
+            WHERE id = :compra_id AND usuario_id = :usuario_id
+            FOR UPDATE
+        """, {"compra_id": compra_id, "usuario_id": usuario_id}, conexao=conexao)
+        if not compra:
+            return
+        fatura = buscar_um("""
+            SELECT paga FROM faturas
+            WHERE usuario_id = :usuario_id AND cartao_id = :cartao_id
+              AND mes = :mes
+            FOR UPDATE
+        """, {
+            "usuario_id": usuario_id, "cartao_id": compra["cartao_id"],
+            "mes": compra["mes"]
+        }, conexao=conexao)
+        if fatura and fatura["paga"]:
+            raise ValueError("Esta parcela pertence a uma fatura paga. Reabra a fatura antes de excluí-la.")
+        executar_sql("""
+            DELETE FROM compras_cartao
+            WHERE id = :compra_id AND usuario_id = :usuario_id
+        """, {"compra_id": compra_id, "usuario_id": usuario_id}, conexao=conexao)
 
 def total_usado_cartao(usuario_id, cartao_id):
     resultado = buscar_um("""
@@ -359,17 +382,16 @@ def tela_cartoes(usuario_id, mes):
                 elif valor_total <= 0:
                     st.warning("Informe um valor maior que zero.")
                 else:
-                    criar_compra(
-                        usuario_id,
-                        cartoes_opcoes[cartao_nome],
-                        descricao.strip(),
-                        categoria,
-                        valor_total,
-                        parcelas
-                    )
-
-                    st.success("Compra cadastrada com sucesso!")
-                    st.rerun()
+                    try:
+                        criar_compra(
+                            usuario_id, cartoes_opcoes[cartao_nome],
+                            descricao.strip(), categoria, valor_total, parcelas
+                        )
+                    except ValueError as erro:
+                        st.error(str(erro))
+                    else:
+                        st.success("Compra cadastrada com sucesso!")
+                        st.rerun()
 
     st.divider()
     cols = st.columns(3)
@@ -411,9 +433,13 @@ def tela_cartoes(usuario_id, mes):
                                 key=f"del_compra_{compra['id']}",
                                 use_container_width=True
                             ):
-                                deletar_compra(usuario_id, compra["id"])
-                                st.success("Compra excluída!")
-                                st.rerun()
+                                try:
+                                    deletar_compra(usuario_id, compra["id"])
+                                except ValueError as erro:
+                                    st.error(str(erro))
+                                else:
+                                    st.success("Compra excluída!")
+                                    st.rerun()
 
                             st.divider()
 
@@ -530,6 +556,10 @@ def tela_cartoes(usuario_id, mes):
                     key=f"del_compra_mes_{compra['id']}",
                     use_container_width=True
                 ):
-                    deletar_compra(usuario_id, compra["id"])
-                    st.success("Compra excluída!")
-                    st.rerun()
+                    try:
+                        deletar_compra(usuario_id, compra["id"])
+                    except ValueError as erro:
+                        st.error(str(erro))
+                    else:
+                        st.success("Compra excluída!")
+                        st.rerun()
