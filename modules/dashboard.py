@@ -28,8 +28,14 @@ def normalizar_mes(mes):
         pass
     raise ValueError("Mês inválido para análises.")
 
+def parametros_mes(mes):
+    mes_iso = normalizar_mes(mes)
+    numero = int(mes_iso.split("-")[1])
+    return {"mes": mes_iso, "mes_nome": MESES_PT[numero - 1]}
+
+
 def buscar_resumo(usuario_id, mes):
-    mes = normalizar_mes(mes)
+    filtros_mes = parametros_mes(mes)
     saldo = buscar_um("""
         SELECT COALESCE(SUM(saldo), 0) AS total
         FROM contas
@@ -42,40 +48,40 @@ def buscar_resumo(usuario_id, mes):
         SELECT valor, recebida
         FROM receitas
         WHERE usuario_id = :usuario_id
-          AND mes = :mes
+          AND (mes = :mes OR LOWER(mes) = :mes_nome)
     """, {
         "usuario_id": usuario_id,
-        "mes": mes
+        **filtros_mes
     })
 
     despesas = buscar_todos("""
         SELECT valor, paga
         FROM despesas
         WHERE usuario_id = :usuario_id
-          AND mes = :mes
+          AND (mes = :mes OR LOWER(mes) = :mes_nome)
     """, {
         "usuario_id": usuario_id,
-        "mes": mes
+        **filtros_mes
     })
 
     compras = buscar_todos("""
         SELECT valor_parcela
         FROM compras_cartao
         WHERE usuario_id = :usuario_id
-          AND mes = :mes
+          AND (mes = :mes OR LOWER(mes) = :mes_nome)
     """, {
         "usuario_id": usuario_id,
-        "mes": mes
+        **filtros_mes
     })
 
     faturas = buscar_todos("""
         SELECT valor, paga
         FROM faturas
         WHERE usuario_id = :usuario_id
-          AND mes = :mes
+          AND (mes = :mes OR LOWER(mes) = :mes_nome)
     """, {
         "usuario_id": usuario_id,
-        "mes": mes
+        **filtros_mes
     })
 
     total_receitas = sum(float(r["valor"]) for r in receitas if r["recebida"])
@@ -99,25 +105,25 @@ def buscar_resumo(usuario_id, mes):
 
 
 def dados_categorias(usuario_id, mes):
-    mes = normalizar_mes(mes)
+    filtros_mes = parametros_mes(mes)
     despesas = buscar_todos("""
         SELECT categoria, valor
         FROM despesas
         WHERE usuario_id = :usuario_id
-          AND mes = :mes
+          AND (mes = :mes OR LOWER(mes) = :mes_nome)
     """, {
         "usuario_id": usuario_id,
-        "mes": mes
+        **filtros_mes
     })
 
     compras = buscar_todos("""
         SELECT categoria, valor_parcela
         FROM compras_cartao
         WHERE usuario_id = :usuario_id
-          AND mes = :mes
+          AND (mes = :mes OR LOWER(mes) = :mes_nome)
     """, {
         "usuario_id": usuario_id,
-        "mes": mes
+        **filtros_mes
     })
 
     dados = []
