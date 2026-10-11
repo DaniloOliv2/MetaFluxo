@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from datetime import datetime
 from database.neon_config import buscar_todos, buscar_um
 
 
@@ -11,7 +12,24 @@ def fmt_moeda(valor):
         return "R$ 0,00"
 
 
+
+MESES_PT = ("janeiro", "fevereiro", "março", "abril", "maio", "junho",
+            "julho", "agosto", "setembro", "outubro", "novembro", "dezembro")
+
+def normalizar_mes(mes):
+    texto_mes = str(mes).strip()
+    if texto_mes.casefold() in MESES_PT:
+        return f"{datetime.now().year}-{MESES_PT.index(texto_mes.casefold()) + 1:02d}"
+    try:
+        ano, numero = map(int, texto_mes.split("-"))
+        if len(texto_mes) == 7 and 1 <= ano <= 9999 and 1 <= numero <= 12:
+            return f"{ano:04d}-{numero:02d}"
+    except (TypeError, ValueError):
+        pass
+    raise ValueError("Mês inválido para análises.")
+
 def buscar_resumo(usuario_id, mes):
+    mes = normalizar_mes(mes)
     saldo = buscar_um("""
         SELECT COALESCE(SUM(saldo), 0) AS total
         FROM contas
@@ -41,7 +59,7 @@ def buscar_resumo(usuario_id, mes):
     })
 
     compras = buscar_todos("""
-        SELECT valor_total
+        SELECT valor_parcela
         FROM compras_cartao
         WHERE usuario_id = :usuario_id
           AND mes = :mes
@@ -64,7 +82,7 @@ def buscar_resumo(usuario_id, mes):
     receitas_a_receber = sum(float(r["valor"]) for r in receitas if not r["recebida"])
     despesas_pagas = sum(float(d["valor"]) for d in despesas if d["paga"])
     despesas_pendentes = sum(float(d["valor"]) for d in despesas if not d["paga"])
-    total_cartao = sum(float(c["valor_total"]) for c in compras)
+    total_cartao = sum(float(c["valor_parcela"]) for c in compras)
     faturas_pendentes = sum(float(f["valor"]) for f in faturas if not f["paga"])
     faturas_pagas = sum(float(f["valor"]) for f in faturas if f["paga"])
 
@@ -81,6 +99,7 @@ def buscar_resumo(usuario_id, mes):
 
 
 def dados_categorias(usuario_id, mes):
+    mes = normalizar_mes(mes)
     despesas = buscar_todos("""
         SELECT categoria, valor
         FROM despesas
@@ -92,7 +111,7 @@ def dados_categorias(usuario_id, mes):
     })
 
     compras = buscar_todos("""
-        SELECT categoria, valor_total
+        SELECT categoria, valor_parcela
         FROM compras_cartao
         WHERE usuario_id = :usuario_id
           AND mes = :mes
@@ -113,7 +132,7 @@ def dados_categorias(usuario_id, mes):
     for item in compras:
         dados.append({
             "categoria": item["categoria"],
-            "valor": float(item["valor_total"]),
+            "valor": float(item["valor_parcela"]),
             "tipo": "Cartão"
         })
 
@@ -128,7 +147,7 @@ def dados_fluxo(usuario_id, mes):
             "Receitas recebidas",
             "Despesas pagas",
             "Despesas pendentes",
-            "Compras no cartão",
+            "Parcelas no cartão",
             "Faturas pendentes"
         ],
         "Valor": [
@@ -168,7 +187,8 @@ def tela_dashboard_profissional(usuario_id, mes, renda_manual=0, investido=0, pr
     st.markdown('<div class="dash-title">📈 Dashboard Profissional</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="dash-subtitle">Resumo financeiro inteligente de {mes}</div>', unsafe_allow_html=True)
 
-    resumo = buscar_resumo(usuario_id, mes)
+    mes_consulta = normalizar_mes(mes)
+    resumo = buscar_resumo(usuario_id, mes_consulta)
 
     saldo_projetado = (
         resumo["saldo_contas"]
@@ -207,13 +227,14 @@ def tela_dashboard_profissional(usuario_id, mes, renda_manual=0, investido=0, pr
     c7.metric("📊 Resultado", "R$ *****" if privacidade else fmt_moeda(resultado_mes))
     c8.metric("🔮 Projetado", "R$ *****" if privacidade else fmt_moeda(saldo_projetado))
 
+    st.caption("Compras parceladas e faturas são visões da mesma dívida: não some esses indicadores. O resultado mensal considera faturas pagas como saída de caixa.")
     st.divider()
 
     col1, col2 = st.columns(2)
 
     with col1:
         st.subheader("📊 Fluxo do mês")
-        df_fluxo = dados_fluxo(usuario_id, mes)
+        df_fluxo = dados_fluxo(usuario_id, mes_consulta)
         df_fluxo = df_fluxo[df_fluxo["Valor"] > 0]
 
         if df_fluxo.empty or privacidade:
@@ -244,7 +265,7 @@ def tela_dashboard_profissional(usuario_id, mes, renda_manual=0, investido=0, pr
 
     with col2:
         st.subheader("🍕 Gastos por categoria")
-        df_cat = dados_categorias(usuario_id, mes)
+        df_cat = dados_categorias(usuario_id, mes_consulta)
 
         if df_cat.empty or privacidade:
             st.info("Sem dados suficientes para gerar gráfico.")
@@ -277,13 +298,13 @@ def tela_dashboard_profissional(usuario_id, mes, renda_manual=0, investido=0, pr
     st.subheader("🤖 Resumo inteligente")
 
     if resumo["faturas_pendentes"] > 0:
-        st.warning(f"Você tem {fmt_moeda(resumo['faturas_pendentes'])} em faturas pendentes neste mês.")
+        st.warning("Você tem faturas pendentes neste mês." if privacidade else f"Você tem {fmt_moeda(resumo['faturas_pendentes'])} em faturas pendentes neste mês.")
 
     if resumo["total_despesas_pendentes"] > 0:
-        st.warning(f"Você tem {fmt_moeda(resumo['total_despesas_pendentes'])} em despesas pendentes.")
+        st.warning("Você tem despesas pendentes." if privacidade else f"Você tem {fmt_moeda(resumo['total_despesas_pendentes'])} em despesas pendentes.")
 
     if resumo["receitas_a_receber"] > 0:
-        st.info(f"Você ainda tem {fmt_moeda(resumo['receitas_a_receber'])} para receber neste mês.")
+        st.info("Você ainda tem receitas a receber neste mês." if privacidade else f"Você ainda tem {fmt_moeda(resumo['receitas_a_receber'])} para receber neste mês.")
 
     if saldo_projetado < 0:
         st.error("Seu saldo projetado está negativo. Revise despesas, faturas e gastos no cartão.")
